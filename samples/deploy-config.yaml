@@ -1,0 +1,284 @@
+version: 1
+
+cluster:
+  name: personal-stack
+  public_domain: example.net
+  kubernetes:
+    bootstrap_control_plane: frankfurt-contabo-1
+    api_server_endpoint: https://203.0.113.10:6443
+    control_plane_token_file: /var/lib/rancher/k3s/server/node-token
+    worker_join_token_file: /var/lib/personal-stack/secrets/k3s/agent-token
+
+sites:
+  frankfurt:
+    kind: vps
+    purpose: primary_cluster_site
+    networking:
+      wan_public_ip: 203.0.113.10
+  enschede:
+    kind: home
+    purpose: home_lan_and_media_site
+    networking:
+      lan_ingress_ip: 192.168.0.99
+      wan_public_ip: 198.51.100.25
+
+nodes:
+  frankfurt-contabo-1:
+    status: active
+    site: frankfurt
+    arch: amd64
+    ssh:
+      host: 203.0.113.10
+      user: deploy
+      port: 2222
+    target_roles:
+      - k3s-control-plane
+      - k3s-worker
+    capacity:
+      cpu_millicores: 16000
+      memory_mib: 32768
+    capabilities:
+      - tailscale
+      - public-ingress
+  enschede-t1000-1:
+    status: active
+    site: enschede
+    arch: amd64
+    ssh:
+      host: 100.103.175.110
+      user: deploy
+      port: 2222
+    target_roles:
+      - k3s-worker
+      - utility-host
+    capacity:
+      cpu_millicores: 54000
+      memory_mib: 32000
+    gpus:
+      - vendor: nvidia
+        model: t1000
+        class: transcode
+    capabilities:
+      - tailscale
+      - lan-ingress
+      - nvidia
+  enschede-rx7900xtx-1:
+    status: active
+    site: enschede
+    arch: amd64
+    ssh:
+      host: 100.112.121.102
+      user: deploy
+      port: 2222
+    target_roles:
+      - k3s-worker
+      - utility-host
+    capacity:
+      cpu_millicores: 72800
+      memory_mib: 32000
+    gpus:
+      - vendor: amd
+        model: rx7900xtx
+        class: render-compute
+    capabilities:
+      - tailscale
+      - lan-ingress
+      - amd-gpu
+
+service_intent:
+  kubernetes:
+    public_apps:
+      - app-ui
+      - assistant-api
+      - gatus
+    internal_platform:
+      - postgres
+      - vault
+    home_media:
+      - jellyfin
+  host_native:
+    enschede-t1000-1:
+      - tailscale
+
+placement_intent:
+  site_affinity:
+    jellyfin: enschede
+    vault: frankfurt
+  node_affinity:
+    assistant-api: frankfurt-contabo-1
+  gpu_preferences:
+    jellyfin:
+      preferred_gpu_model: t1000
+      temporary_gpu_model: rx7900xtx
+
+exposure_intent:
+  public:
+    - app-ui
+    - assistant-api
+    - gatus
+  public_and_lan:
+    - jellyfin
+  internal_only:
+    - postgres
+    - vault
+  lan_only: []
+
+access_intent:
+  sso_protected:
+    - assistant-api
+    - gatus
+    - jellyfin
+  host_labels:
+    app-ui: root
+    assistant-api: assistant
+    gatus: status
+    jellyfin: media
+  root_redirect:
+    gatus: gatus-root-redirect
+
+ingress_intent:
+  defaults:
+    namespace: edge-system
+    public_ingress_class: traefik-public
+    lan_ingress_class: traefik-lan
+    entrypoint: websecure
+    tls: true
+    public_dns_target: ingress.example.net
+    sso_middleware: forward-auth
+  kubernetes_backends:
+    app-ui:
+      namespace: default
+      service: app-ui
+      port: 3000
+      health:
+        type: http
+        path: /healthz
+        expected_status: 200
+        probe_strategy: external
+    assistant-api:
+      namespace: assistant-system
+      service: assistant-api
+      port: 8080
+      health:
+        type: http
+        path: /api/actuator/health
+        expected_status: 200
+        probe_strategy: both
+    gatus:
+      namespace: observability
+      service: gatus
+      port: 8080
+      health:
+        type: http
+        path: /health
+        expected_status: 200
+    jellyfin:
+      namespace: media
+      service: jellyfin
+      port: 8096
+      health:
+        type: http
+        path: /health
+        expected_status: 200
+      extra_probes:
+        - name: https
+          port: 8920
+          type: tcp
+          group: home-media
+  route_rules:
+    - name: app-ui
+      service: app-ui
+      access: direct
+    - name: assistant-api
+      service: assistant-api
+      access: sso_protected
+      path_prefixes:
+        - /api/
+      excluded_exact_paths:
+        - /api/actuator/health
+    - name: assistant-api-health
+      service: assistant-api
+      access: direct
+      exact_paths:
+        - /api/actuator/health
+    - name: gatus
+      service: gatus
+    - name: jellyfin
+      service: jellyfin
+  wan_origin_overrides:
+    assistant-api: edge_direct
+    jellyfin: home_direct
+
+monitoring_intent:
+  kubernetes_backends:
+    postgres:
+      namespace: data-system
+      service: postgres-rw
+      port: 5432
+      health:
+        type: tcp
+        probe_strategy: internal
+
+image_metadata:
+  workloads:
+    app-ui:
+      repository: ghcr.io/extratoast/app-ui
+      tag: latest
+      pull_policy: Always
+      source: first_party
+      update:
+        eligible: true
+        strategy: latest_tag
+        keel:
+          policy: force
+          match_tag: true
+          trigger: poll
+          poll_schedule: "@every 2m"
+    assistant-api:
+      repository: ghcr.io/extratoast/assistant-api
+      tag: latest
+      pull_policy: Always
+      source: first_party
+      update:
+        eligible: true
+        strategy: latest_tag
+        keel:
+          policy: force
+          match_tag: true
+          trigger: poll
+          poll_schedule: "@every 2m"
+    postgres:
+      repository: ghcr.io/cloudnative-pg/postgresql
+      tag: "16.3"
+      pull_policy: IfNotPresent
+      source: third_party
+      update:
+        eligible: false
+        strategy: pinned
+    jellyfin:
+      repository: lscr.io/linuxserver/jellyfin
+      tag: "10.10.3"
+      pull_policy: IfNotPresent
+      source: third_party
+      update:
+        eligible: false
+        strategy: pinned
+
+adapter_output_intent:
+  adapters:
+    - traefik-public
+    - traefik-lan
+    - gatus
+    - edge-catalog
+    - edge-route-catalog
+    - image-metadata
+  output_paths:
+    traefik-public: platform/cluster/flux/apps/edge/traefik-ingressroutes.yaml
+    traefik-lan: platform/cluster/flux/apps/edge/traefik-lan-ingressroutes.yaml
+    gatus: platform/cluster/flux/apps/observability/gatus/gatus-endpoints-configmap.yaml
+    edge-catalog: platform/cluster/flux/apps/edge/edge-catalog-configmap.yaml
+    edge-route-catalog: platform/cluster/flux/apps/edge/edge-route-catalog-configmap.yaml
+    image-metadata: platform/cluster/flux/apps/edge/image-metadata.yaml
+
+extensions:
+  nomad: {}

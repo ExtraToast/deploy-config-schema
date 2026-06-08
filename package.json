@@ -1,0 +1,45 @@
+{
+  "name": "@extratoast/deploy-config-schema",
+  "version": "0.1.0",
+  "description": "JSON Schema and CLI contract for deploy and infrastructure config artifacts.",
+  "type": "module",
+  "bin": {
+    "deploy-config-schema": "./bin/deploy-config-schema.js"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./schema": "./schemas/deploy-config.schema.json"
+  },
+  "files": [
+    "bin/",
+    "schemas/",
+    "src/",
+    "docs/",
+    "samples/"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "validate:schema": "node scripts/validate-schema.js",
+    "validate:sample": "node bin/deploy-config-schema.js validate samples/deploy-config.yaml",
+    "render:sample": "node bin/deploy-config-schema.js render traefik-public samples/deploy-config.yaml"
+  },
+  "keywords": [
+    "deploy",
+    "json-schema",
+    "traefik",
+    "gatus",
+    "keel"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "yaml": "^2.8.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
