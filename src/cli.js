@@ -3,10 +3,11 @@ import { dirname } from "node:path";
 import { loadConfig, ConfigLoadError } from "./config-loader.js";
 import { validateConfig } from "./validator.js";
 import { renderTraefik } from "./adapters/traefik.js";
-import { stubAdapters, stubDiagnostic } from "./adapters/stubs.js";
+import { renderEdgeCatalog, renderEdgeRouteCatalog } from "./adapters/catalog.js";
+import { renderGatus } from "./adapters/gatus.js";
+import { renderImageMetadata } from "./adapters/image-metadata.js";
 
-const implementedAdapters = new Set(["traefik-public", "traefik-lan"]);
-const allAdapters = new Set([...implementedAdapters, ...stubAdapters]);
+const allAdapters = new Set(["traefik-public", "traefik-lan", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata"]);
 
 export async function runCli(args, streams = { stdout: process.stdout, stderr: process.stderr }) {
   if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
@@ -89,14 +90,27 @@ function runRender(args, streams) {
     return 1;
   }
 
-  if (stubAdapters.has(adapter)) {
-    writeDiagnostics(streams.stderr, [stubDiagnostic(adapter)]);
-    return 2;
-  }
-
-  const rendered = renderTraefik(loaded.config, adapter);
+  const rendered = renderAdapter(loaded.config, adapter);
   writeOutput(rendered, options.output, streams.stdout);
   return 0;
+}
+
+function renderAdapter(config, adapter) {
+  switch (adapter) {
+    case "traefik-public":
+    case "traefik-lan":
+      return renderTraefik(config, adapter);
+    case "gatus":
+      return renderGatus(config);
+    case "edge-catalog":
+      return renderEdgeCatalog(config);
+    case "edge-route-catalog":
+      return renderEdgeRouteCatalog(config);
+    case "image-metadata":
+      return renderImageMetadata(config);
+    default:
+      throw new Error(`unsupported adapter: ${adapter}`);
+  }
 }
 
 function loadAndValidate(path) {

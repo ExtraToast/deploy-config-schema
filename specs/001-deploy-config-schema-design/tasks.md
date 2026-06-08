@@ -22,10 +22,10 @@
 - [x] T007 [FR-3/FR-4/FR-12/FR-16/FR-20/SC-2] Implement semantic validation for references, duplicate exposure, missing host labels, WAN origins, probe constraints, and image rollout contradictions.
 - [x] T008 [FR-6/FR-7] Implement `src/cli.js` with `validate` and `render <adapter>` commands, structured diagnostics, stdout, and `--output` support.
 
-## Phase 3: Adapter Skeletons
+## Phase 3: Adapter MVP
 
 - [x] T009 [FR-8/FR-9/FR-10/FR-11/FR-12/FR-13/SC-3/SC-4/SC-5] Implement and test deterministic Traefik public/LAN IngressRoute rendering in `src/adapters/traefik.js` and `test/traefik.test.js`.
-- [x] T010 [FR-14/FR-15/FR-16/FR-17/FR-18/FR-19/FR-20/SC-3/SC-6..SC-10] Add adapter stubs in `src/adapters/stubs.js`, CLI TODO diagnostics, tests, and `docs/adapters.md` tracing the deferred Gatus, edge catalog, edge route catalog, and image metadata renderers.
+- [x] T010 [FR-14/FR-15/FR-16/FR-17/FR-18/FR-19/FR-20/SC-3/SC-6..SC-10] Replace adapter stubs with implemented Gatus, edge catalog, edge route catalog, and image metadata renderers plus deterministic tests.
 
 ## Phase 4: Automation and Documentation
 

@@ -807,6 +807,24 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "namespaces": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/adapterName"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "configmap_names": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/adapterName"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/identifier"
+          }
         }
       }
     },

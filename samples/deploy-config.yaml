@@ -279,6 +279,10 @@ adapter_output_intent:
     edge-catalog: platform/cluster/flux/apps/edge/edge-catalog-configmap.yaml
     edge-route-catalog: platform/cluster/flux/apps/edge/edge-route-catalog-configmap.yaml
     image-metadata: platform/cluster/flux/apps/edge/image-metadata.yaml
+  namespaces:
+    edge-catalog: edge-system
+    edge-route-catalog: edge-system
+    gatus: observability
 
 extensions:
   nomad: {}

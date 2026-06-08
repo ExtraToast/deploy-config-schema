@@ -1,6 +1,6 @@
 # deploy-config-schema
 
-`@extratoast/deploy-config-schema` provides a JSON Schema and CLI contract for deploy and infrastructure config documents. The initial skeleton validates YAML or JSON config, renders deterministic Traefik IngressRoutes for the sample config, and exposes documented TODO stubs for the remaining adapters.
+`@extratoast/deploy-config-schema` provides a JSON Schema and CLI contract for deploy and infrastructure config documents. The Round-2 MVP validates YAML or JSON config and renders deterministic Traefik IngressRoutes, edge catalogs, Gatus endpoints, and image metadata audit output for the common Kubernetes platform case.
 
 ## Install
 
@@ -34,12 +34,12 @@ Available adapters:
 
 - `traefik-public`: implemented.
 - `traefik-lan`: implemented.
-- `gatus`: TODO stub.
-- `edge-catalog`: TODO stub.
-- `edge-route-catalog`: TODO stub.
-- `image-metadata`: TODO stub.
+- `gatus`: implemented.
+- `edge-catalog`: implemented.
+- `edge-route-catalog`: implemented.
+- `image-metadata`: implemented.
 
-Stub adapters validate input and then return `E_ADAPTER_TODO` with exit code 2. See [docs/adapters.md](docs/adapters.md).
+See [docs/adapters.md](docs/adapters.md) for adapter scope and follow-ups.
 
 ## Local Development
 
