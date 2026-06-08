@@ -1,3 +1,5 @@
+import { exposureByService, fqdn, routeRules } from "./model.js";
+
 const PUBLIC_ADAPTER = "traefik-public";
 const LAN_ADAPTER = "traefik-lan";
 
@@ -23,7 +25,7 @@ export function renderTraefik(config, adapter) {
       route: {
         ...route,
         name: `${route.name}${suffix}`,
-        access: isLan ? "direct" : resolveRouteAccess(config, route),
+        access: isLan ? "direct" : route.access,
       },
       backend: config.ingress_intent.kubernetes_backends[route.service],
       dnsTarget: dnsTargets.get(route.service) ?? dnsTargets.get("*"),
@@ -33,39 +35,6 @@ export function renderTraefik(config, adapter) {
   return routes
     .map(({ route, backend, dnsTarget }) => renderIngressRoute(config, route, backend, className, dnsTarget))
     .join("\n---\n");
-}
-
-function routeRules(config) {
-  if (config.ingress_intent.route_rules.length > 0) {
-    return config.ingress_intent.route_rules;
-  }
-
-  return Object.keys(config.access_intent.host_labels)
-    .sort()
-    .map((service) => ({ name: service, service }));
-}
-
-function resolveRouteAccess(config, route) {
-  if (route.access) {
-    return route.access;
-  }
-  if (config.access_intent.sso_protected.includes(route.service)) {
-    return "sso_protected";
-  }
-  const exposure = exposureClassFor(config, route.service);
-  if (exposure === "internal_only") {
-    return "cluster_internal";
-  }
-  return "direct";
-}
-
-function exposureClassFor(config, serviceName) {
-  for (const exposureClass of ["public", "public_and_lan", "internal_only", "lan_only"]) {
-    if (config.exposure_intent[exposureClass].includes(serviceName)) {
-      return exposureClass;
-    }
-  }
-  return undefined;
 }
 
 function publicDnsTargets(config) {
@@ -153,7 +122,6 @@ function routeMiddlewares(config, route) {
 }
 
 function toTraefikMatch(config, route) {
-  const host = fqdn(route.host_label ?? config.access_intent.host_labels[route.service], config.cluster.public_domain);
   const positive = [
     ...(route.path_prefixes ?? []).map((path) => `PathPrefix(\`${path}\`)`),
     ...(route.exact_paths ?? []).map((path) => `Path(\`${path}\`)`),
@@ -162,7 +130,7 @@ function toTraefikMatch(config, route) {
     ...(route.excluded_path_prefixes ?? []).map((path) => `!PathPrefix(\`${path}\`)`),
     ...(route.excluded_exact_paths ?? []).map((path) => `!Path(\`${path}\`)`),
   ];
-  const predicates = [`Host(\`${host}\`)`];
+  const predicates = [`Host(\`${route.host}\`)`];
   const combined = combinePredicates(positive);
   if (combined) {
     predicates.push(combined);
@@ -175,10 +143,6 @@ function combinePredicates(predicates) {
   if (predicates.length === 0) return undefined;
   if (predicates.length === 1) return predicates[0];
   return `(${predicates.join(" || ")})`;
-}
-
-function fqdn(hostLabel, publicDomain) {
-  return hostLabel === "root" ? publicDomain : `${hostLabel}.${publicDomain}`;
 }
 
 function yamlSingleQuoted(value) {

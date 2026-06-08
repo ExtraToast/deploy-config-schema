@@ -177,15 +177,14 @@ test("render command reports adapter selection errors", async () => {
   assert.equal(parseDiagnostic(notSelectedStderr.text()).code, "E_ADAPTER_NOT_SELECTED");
 });
 
-test("stub adapters validate input and return TODO diagnostics", async () => {
+test("non-Traefik adapters render implemented output", async () => {
   const stdout = stream();
   const stderr = stream();
 
   const exitCode = await runCli(["render", "gatus", "samples/deploy-config.yaml"], { stdout, stderr });
-  const body = JSON.parse(stderr.text());
 
-  assert.equal(exitCode, 2);
-  assert.equal(stdout.text(), "");
-  assert.equal(body.valid, false);
-  assert.equal(body.diagnostics[0].code, "E_ADAPTER_TODO");
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  assert.match(stdout.text(), /kind: ConfigMap/);
+  assert.match(stdout.text(), /name: gatus-endpoints/);
 });

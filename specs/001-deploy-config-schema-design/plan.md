@@ -17,8 +17,11 @@ Release automation uses release-please for version tags and a separate npm publi
 - `schemas/deploy-config.schema.json`: structural schema for version, cluster, sites, nodes, service intent, placement, exposure, access, ingress, monitoring, image metadata, adapter output intent, and reserved future extensions.
 - `src/config-loader.js`: YAML/JSON parsing with deterministic input errors.
 - `src/validator.js`: Ajv schema validation plus semantic reference validation for sites, nodes, services, exposure classes, host labels, backends, probes, WAN overrides, and image rollout metadata.
-- `src/adapters/traefik.js`: implemented Traefik public/LAN IngressRoute renderer for sample-backed Kubernetes services.
-- `src/adapters/stubs.js`: deterministic TODO diagnostics for Gatus, edge catalog, edge route catalog, and image metadata adapters.
+- `src/adapters/model.js`: shared derivations for exposure class, access class, service groups, FQDNs, route rules, and ConfigMap wrapping.
+- `src/adapters/traefik.js`: Traefik public/LAN IngressRoute renderer for sample-backed Kubernetes services.
+- `src/adapters/catalog.js`: edge catalog and edge route catalog ConfigMap renderers.
+- `src/adapters/gatus.js`: Gatus endpoint ConfigMap renderer for ingress, monitoring, HTTP, TCP, and extra probes.
+- `src/adapters/image-metadata.js`: deterministic image rollout metadata audit renderer.
 - `src/cli.js` and `bin/deploy-config-schema.js`: command parsing for `validate` and `render <adapter>`, stdout output, `--output` writes, and stable exit codes.
 - `samples/deploy-config.yaml`: non-secret representative sample based on the personal-stack inventory concepts.
 - `test/`: Node test runner coverage for schema validation, semantic diagnostics, CLI behavior, deterministic Traefik output, and adapter stubs.
@@ -42,11 +45,11 @@ Release automation uses release-please for version tags and a separate npm publi
 | FR-11 | Traefik route renderer emits ingress class, namespace, route name, host match, path rules, backend service target, TLS, redirect/SSO middleware, and DNS annotations. |
 | FR-12 | WAN origin overrides map `home_direct` and `edge_direct` to direct DNS targets from matching site WAN IPs. |
 | FR-13 | `ingress_intent.route_rules` provides a generic route-rule model with include/exclude path fields and per-route access override. |
-| FR-14 | Gatus command stub exists and validates input; full ConfigMap-compatible output is a documented TODO. |
+| FR-14 | `src/adapters/gatus.js` renders a ConfigMap-compatible endpoints document for ingress and monitoring backends. |
 | FR-15 | Probe schema models HTTP/TCP, health paths, alternate ports, status codes, response time, internal/external/both strategies, groups, and extra probes. |
-| FR-16 | Gatus strategy defaults are documented as TODO behavior in adapter docs and stub diagnostics. |
-| FR-17 | Edge catalog command stub exists and validates input; full catalog output is a documented TODO. |
-| FR-18 | Edge route catalog command stub exists and validates input; route-rule schema is shared with Traefik. |
+| FR-16 | Gatus renderer defaults SSO-protected HTTP and TCP services to internal probes unless probe strategy is explicit. |
+| FR-17 | `src/adapters/catalog.js` renders the edge catalog ConfigMap. |
+| FR-18 | `src/adapters/catalog.js` renders the edge route catalog ConfigMap from the same generic route rules used by Traefik. |
 | FR-19 | Image metadata schema models repository, tag, pull policy, update eligibility, Keel policy, match-tag, trigger mode, and poll schedule. |
 | FR-20 | Image semantic validation rejects pinned images marked for latest-tag rollout and third-party images marked auto-update eligible. |
 | FR-21 | `extensions.nomad` reserves a future extension area without rendering support. |
@@ -61,9 +64,9 @@ Release automation uses release-please for version tags and a separate npm publi
 
 - SC-1: The sample config represents non-secret personal-stack inventory concepts and must validate locally and in the pipeline.
 - SC-2: Unit tests cover missing site, missing node, missing service, missing backend, missing host label, duplicate exposure, and unsupported probe type diagnostics.
-- SC-3: Tests run Traefik render twice and compare byte-for-byte output; stub adapters return deterministic TODO diagnostics.
+- SC-3: Tests run implemented adapters twice and compare byte-for-byte output.
 - SC-4 and SC-5: Traefik tests assert public/LAN inclusion and required route fields.
-- SC-6 through SC-10: Stub adapters and `docs/adapters.md` preserve the contract and TODO trace for later full rendering.
+- SC-6 through SC-10: Gatus, edge catalog, edge route catalog, and image metadata tests assert required MVP fields and deterministic ordering.
 - SC-11: Package and README name `@extratoast/deploy-config-schema`.
 - SC-12: No downstream edits, live deployment action, or Nomad rendering is part of this branch.
 
@@ -82,5 +85,5 @@ Pipeline checks run the same commands and aggregate through `Pipeline Complete`.
 ## Risks and Follow-ups
 
 - JSON Schema alone cannot express all cross-document references portably, so semantic validation is part of the CLI contract.
-- Gatus, edge catalog, edge route catalog, and image metadata commands intentionally stop with TODO diagnostics until their full renderers are implemented.
-- The Traefik skeleton covers IngressRoute output only; applying manifests and consumer migration are outside this repository.
+- The MVP covers common-case Kubernetes ingress, catalogs, health probes, and image audit metadata. Per-service special-casing and Nomad inputs stay as follow-ups unless they are represented as generic route/probe data.
+- Applying manifests and consumer migration are outside this repository.

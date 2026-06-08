@@ -13,7 +13,7 @@ The design is based on the current personal-stack fleet inventory, platform tool
 
 This repository is distributed as a versioned artifact. personal-stack and website consume pinned versions through Renovate when they opt into the schema. personal-stack remains continuously auto-deployed from its own repository and is not converted into a versioned product. Published coordinates must stay short and must not use doubled plugin-marker names.
 
-This feature now includes an initial implementation skeleton. The skeleton must define the JSON schema, package metadata, validating CLI, deterministic adapter command surface, a sample config, and at least one adapter that renders sample output. Gatus, edge catalog, edge route catalog, and image metadata adapters may remain explicit command stubs in this slice when their TODO status is documented and traceable. The feature must not apply generated output, modify downstream repositories, drive live platform changes, or define a migration plan that applies generated output.
+This feature now includes the Round-2 extraction MVP. The package must define the JSON schema, package metadata, validating CLI, deterministic adapter command surface, a representative sample config, and implemented adapters for Traefik public/LAN IngressRoutes, edge catalog ConfigMaps, edge route catalog ConfigMaps, Gatus endpoint ConfigMaps, and image metadata audit output. The feature must not apply generated output, modify downstream repositories, drive live platform changes, or define a migration plan that applies generated output.
 
 ## User Scenarios
 
@@ -74,11 +74,11 @@ personal-stack and website depend on the published deploy-config-schema artifact
 - SC-3: Running the same implemented adapter twice against the same valid input produces byte-for-byte identical output, and stubbed adapters return deterministic TODO diagnostics until implemented.
 - SC-4: The Traefik public output includes only services that are public or public-and-LAN and have Kubernetes backends; the LAN output includes only services that are public-and-LAN or LAN-only and have Kubernetes backends.
 - SC-5: Every generated Traefik route includes ingress class, host match, backend namespace, backend service, backend port, TLS configuration, and required middleware or DNS annotations when applicable.
-- SC-6: The Gatus adapter contract identifies one endpoint for every eligible ingress backend and monitoring backend, plus every declared extra probe, sorted by group and endpoint name; the initial skeleton may expose this as a TODO stub.
-- SC-7: The Gatus adapter contract requires HTTP endpoints to include status and response time conditions, while TCP endpoints include a connection condition; the initial skeleton may expose this as a TODO stub.
-- SC-8: The edge catalog adapter contract contains one entry for every service with exposure intent and includes exposure, access, and host fields where applicable; the initial skeleton may expose this as a TODO stub.
-- SC-9: The edge route catalog adapter contract contains all declared route rules and can be compared mechanically to generated Traefik route names; the initial skeleton may expose this as a TODO stub.
-- SC-10: The image metadata adapter contract identifies all configured images, separates latest-tag Keel-managed workloads from pinned third-party workloads, and reports poll cadence for every Keel-managed workload; the initial skeleton may expose this as a TODO stub.
+- SC-6: The Gatus adapter identifies one endpoint for every eligible ingress backend and monitoring backend, plus every declared extra probe, sorted by group and endpoint name.
+- SC-7: The Gatus adapter emits HTTP endpoints with status and response time conditions, while TCP endpoints include a connection condition.
+- SC-8: The edge catalog adapter contains one entry for every service with exposure intent and includes exposure, access, and host fields where applicable.
+- SC-9: The edge route catalog adapter contains all declared route rules and can be compared mechanically to generated Traefik route names.
+- SC-10: The image metadata adapter identifies all configured images, separates latest-tag Keel-managed workloads from pinned third-party workloads, and reports poll cadence for every Keel-managed workload.
 - SC-11: The distribution section names `@extratoast/deploy-config-schema` as the initial short coordinate, and a Renovate rule can pin that coordinate without causing doubled plugin-marker names.
 - SC-12: No generated output application, downstream repository edit, live deployment action, or Nomad job rendering is required to complete this initial skeleton.
 
@@ -132,7 +132,6 @@ personal-stack and website depend on the published deploy-config-schema artifact
 
 ## Out of Scope
 
-- Full Gatus, edge catalog, edge route catalog, and image metadata rendering beyond documented command stubs.
 - Modifying personal-stack, website, or any other downstream repository.
 - Applying generated manifests to a cluster.
 - Replacing current personal-stack render scripts during this initial skeleton.
@@ -141,3 +140,4 @@ personal-stack and website depend on the published deploy-config-schema artifact
 - Managing secrets, credentials, certificates, or runtime tokens.
 - Rendering Nomad job files or validating full Nomad job specifications.
 - Defining complete workload manifests beyond the adapter outputs named in this specification.
+- Per-service special-casing that is not represented as generic route rules or health probes in the deploy config.
