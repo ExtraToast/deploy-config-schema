@@ -6,6 +6,10 @@ import { renderTraefik } from "../src/adapters/traefik.js";
 
 const sample = YAML.parse(readFileSync(new URL("../samples/deploy-config.yaml", import.meta.url), "utf8"));
 
+function clone(value) {
+  return structuredClone(value);
+}
+
 test("public Traefik output is deterministic and contains required route fields", () => {
   const first = renderTraefik(sample, "traefik-public");
   const second = renderTraefik(sample, "traefik-public");
@@ -34,4 +38,20 @@ test("LAN Traefik output includes only LAN-eligible routes with LAN class", () =
   assert.doesNotMatch(rendered, /name: app-ui/);
   assert.doesNotMatch(rendered, /external-dns\.alpha\.kubernetes\.io\/target/);
   assert.doesNotMatch(rendered, /name: forward-auth/);
+});
+
+test("Traefik rendering falls back to host labels when routes are omitted", () => {
+  const config = clone(sample);
+  config.ingress_intent.route_rules = [];
+  delete config.ingress_intent.defaults.public_dns_target;
+
+  const rendered = renderTraefik(config, "traefik-public");
+
+  assert.match(rendered, /external-dns\.alpha\.kubernetes\.io\/target: ingress\.example\.net/);
+  assert.match(rendered, /name: gatus-root-redirect/);
+  assert.match(rendered, /match: 'Host\(`example\.net`\)'/);
+});
+
+test("Traefik rendering rejects unsupported adapters", () => {
+  assert.throws(() => renderTraefik(sample, "gatus"), /unsupported Traefik adapter/);
 });
