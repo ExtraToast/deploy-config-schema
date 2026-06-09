@@ -1,0 +1,75 @@
+version: 1
+name: personal-stack
+domain: example.net
+
+gitops:
+  root: platform/cluster/flux
+  environment: production
+
+sites:
+  frankfurt:
+    kind: vps
+    purpose: primary_cluster_site
+    wan: 203.0.113.10
+  enschede:
+    kind: home
+    purpose: home_lan_and_media_site
+    lanIngress: 192.168.0.99
+    wan: 198.51.100.25
+
+packs:
+  core:
+    - cert-manager
+    - external-dns
+    - traefik-public
+    - traefik-lan
+    - metallb
+    - vso
+  observability:
+    gatus: true
+
+hosts:
+  frankfurt-contabo-1:
+    site: frankfurt
+    system: x86_64-linux
+    roles:
+      - base
+      - k3s-control-plane
+      - k3s-worker
+    capabilities:
+      - public-ingress
+    ssh: deploy@203.0.113.10:2222
+  enschede-rx7900xtx-1:
+    site: enschede
+    system: x86_64-linux
+    roles:
+      - base
+      - k3s-worker
+      - utility-host
+      - gpu-amd
+    capabilities:
+      - tailscale
+      - lan-ingress
+      - amd-gpu
+
+services:
+  app-ui:
+    group: stateless
+    image: ghcr.io/example/app-ui:latest
+    port: 80
+    route: root
+    health: /
+  jellyfin:
+    group: media
+    namespace: media-system
+    image: jellyfin/jellyfin:10.11.8
+    port: 8096
+    route:
+      host: jellyfin
+      exposure: public_and_lan
+      sso: true
+      origin: home_direct
+    health: /health
+    schedule:
+      requiredCapabilities:
+        - amd-gpu

@@ -8,6 +8,7 @@
   },
   "exports": {
     ".": "./src/index.js",
+    "./schemas/platform": "./schemas/platform.schema.json",
     "./schema": "./schemas/deploy-config.schema.json",
     "./schemas/round3/service-intent": "./schemas/round3/service-intent.schema.json",
     "./schemas/round3/fleet-inventory": "./schemas/round3/fleet-inventory.schema.json",

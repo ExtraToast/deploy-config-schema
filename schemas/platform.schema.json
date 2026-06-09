@@ -1,0 +1,410 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.extratoast.com/platform.schema.json",
+  "title": "ExtraToast Minimal Platform Intent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "domain"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "name": {
+      "$ref": "#/$defs/identifier"
+    },
+    "domain": {
+      "$ref": "#/$defs/hostname"
+    },
+    "cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["k3s", "kubernetes", "custom"]
+        },
+        "api": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "bootstrap": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "gitops": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "environment": {
+          "$ref": "#/$defs/identifier"
+        },
+        "interval": {
+          "$ref": "#/$defs/duration"
+        },
+        "intervals": {
+          "$ref": "#/$defs/duration"
+        }
+      }
+    },
+    "sites": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/site"
+      }
+    },
+    "hosts": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/host"
+      }
+    },
+    "packs": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "services": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/service"
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "hostname": {
+      "type": "string",
+      "pattern": "^(root|[a-z0-9][a-z0-9.-]*[a-z0-9])$"
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(s|m|h|d)$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "^/"
+      }
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "quantity": {
+      "type": "string",
+      "pattern": "^[0-9]+(m|Mi|Gi|Ti)?$"
+    },
+    "site": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["home", "vps", "cloud", "edge", "lab", "colo", "custom"]
+        },
+        "purpose": {
+          "$ref": "#/$defs/identifier"
+        },
+        "region": {
+          "$ref": "#/$defs/identifier"
+        },
+        "lanIngress": {
+          "type": "string",
+          "minLength": 1
+        },
+        "wan": {
+          "type": "string",
+          "minLength": 1
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "site": {
+          "$ref": "#/$defs/identifier"
+        },
+        "system": {
+          "enum": ["x86_64-linux", "aarch64-linux"]
+        },
+        "roles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "ssh": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hostModule": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "taints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "capacity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpuMillicores": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "memoryMiB": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "port"],
+      "properties": {
+        "group": {
+          "$ref": "#/$defs/identifier"
+        },
+        "namespace": {
+          "$ref": "#/$defs/identifier"
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "route": {
+          "oneOf": [
+            {
+              "enum": ["root"]
+            },
+            {
+              "type": "string",
+              "pattern": "^/"
+            },
+            {
+              "$ref": "#/$defs/route"
+            }
+          ]
+        },
+        "health": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^/"
+            },
+            {
+              "$ref": "#/$defs/health"
+            }
+          ]
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/secret"
+          }
+        },
+        "storage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/storage"
+          }
+        },
+        "gpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "vendor": {
+              "enum": ["amd", "nvidia", "intel"]
+            },
+            "class": {
+              "$ref": "#/$defs/identifier"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "schedule": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "site": {
+              "$ref": "#/$defs/identifier"
+            },
+            "node": {
+              "$ref": "#/$defs/identifier"
+            },
+            "requiredCapabilities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/identifier"
+              }
+            },
+            "spread": {
+              "$ref": "#/$defs/identifier"
+            },
+            "arch": {
+              "enum": ["amd64", "arm64"]
+            }
+          }
+        },
+        "rollout": {
+          "enum": ["latest", "pinned", "manual"]
+        },
+        "managed": {
+          "enum": [true, false, "partial"]
+        },
+        "preserve": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "$ref": "#/$defs/hostname"
+        },
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "stripPrefix": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "exposure": {
+          "enum": ["public", "public_and_lan", "lan_only", "internal_only"]
+        },
+        "sso": {
+          "type": "boolean"
+        },
+        "origin": {
+          "$ref": "#/$defs/identifier"
+        },
+        "port": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "expectedStatus": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        }
+      }
+    },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/identifier"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "source": {
+          "enum": ["kubernetes_secret", "vso_static", "vault_kv", "vault_dynamic_database", "vault_dynamic_rabbitmq", "vault_transit"]
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "mount"],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier"
+        },
+        "mount": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "size": {
+          "$ref": "#/$defs/quantity"
+        },
+        "hostPath": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "node": {
+          "$ref": "#/$defs/identifier"
+        }
+      }
+    }
+  }
+}
