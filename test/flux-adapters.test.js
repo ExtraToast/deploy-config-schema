@@ -15,11 +15,127 @@ function readYaml(relativePath) {
   return YAML.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
 }
 
-function context(platform) {
+const fixtureBlueprintRegistry = {
+  "packs/flux-core/cert-manager": coreBlueprint("cert-manager", "cert-manager", "cert-manager"),
+  "packs/flux-core/external-dns-cloudflare": coreBlueprint("external-dns", "external-dns", "external-dns"),
+  "packs/flux-core/traefik-public": coreBlueprint("ingress-system", "traefik", "traefik"),
+  "packs/flux-core/traefik-lan": coreBlueprint("lan-ingress-system", "traefik", "traefik-lan"),
+  "packs/flux-core/metallb": {
+    ...coreBlueprint("metallb-system", "metallb", "metallb"),
+    "address-pool.yaml": yaml({
+      apiVersion: "metallb.io/v1beta1",
+      kind: "IPAddressPool",
+      metadata: { name: "lan-ingress", namespace: "metallb-system" },
+      spec: { addresses: ["192.168.0.99-192.168.0.99"] },
+    }),
+  },
+  "packs/flux-core/vso": coreBlueprint("vault-secrets-operator", "hashicorp", "vault-secrets-operator"),
+  "packs/edge": {
+    "namespace.yaml": namespace("edge-system"),
+    "cluster-issuer-cloudflare.yaml": yaml({
+      apiVersion: "cert-manager.io/v1",
+      kind: "ClusterIssuer",
+      metadata: { name: "cloudflare" },
+      spec: { acme: { email: "admin@example.net" } },
+    }),
+    "traefik-default-tls.yaml": yaml({
+      apiVersion: "traefik.io/v1alpha1",
+      kind: "TLSStore",
+      metadata: { name: "default", namespace: "edge-system" },
+      spec: { defaultCertificate: { secretName: "wildcard-tls" } },
+    }),
+    "traefik-forward-auth-middleware.yaml": yaml({
+      apiVersion: "traefik.io/v1alpha1",
+      kind: "Middleware",
+      metadata: { name: "forward-auth", namespace: "edge-system" },
+      spec: { forwardAuth: { address: "http://forward-auth.edge-system.svc.cluster.local:4181" } },
+    }),
+    "kustomization.yaml": kustomization(["namespace.yaml", "cluster-issuer-cloudflare.yaml", "traefik-default-tls.yaml", "traefik-forward-auth-middleware.yaml"]),
+  },
+  "packs/observability": {
+    "namespace.yaml": namespace("observability"),
+    "kustomization.yaml": kustomization(["namespace.yaml", "gatus/kustomization.yaml"]),
+    "gatus/config.yaml": yaml({
+      apiVersion: "v1",
+      kind: "ConfigMap",
+      metadata: { name: "gatus-config", namespace: "observability" },
+    }),
+    "gatus/deployment.yaml": yaml({
+      apiVersion: "apps/v1",
+      kind: "Deployment",
+      metadata: { name: "gatus", namespace: "observability" },
+    }),
+    "gatus/endpoints-placeholder.yaml": yaml({
+      apiVersion: "v1",
+      kind: "ConfigMap",
+      metadata: { name: "gatus-endpoints", namespace: "observability" },
+    }),
+    "gatus/kustomization.yaml": kustomization(["config.yaml", "endpoints-placeholder.yaml", "deployment.yaml", "service.yaml"]),
+    "gatus/service.yaml": yaml({
+      apiVersion: "v1",
+      kind: "Service",
+      metadata: { name: "gatus", namespace: "observability" },
+    }),
+  },
+};
+
+function coreBlueprint(namespaceName, sourceName, releaseName) {
+  return {
+    "namespace.yaml": namespace(namespaceName),
+    "source.yaml": yaml({
+      apiVersion: "source.toolkit.fluxcd.io/v1",
+      kind: "HelmRepository",
+      metadata: { name: sourceName, namespace: namespaceName },
+      spec: { interval: "1h", url: `https://charts.example.test/${sourceName}` },
+    }),
+    "release.yaml": yaml({
+      apiVersion: "helm.toolkit.fluxcd.io/v2",
+      kind: "HelmRelease",
+      metadata: { name: releaseName, namespace: namespaceName },
+      spec: {
+        interval: "30m",
+        chart: {
+          spec: {
+            chart: releaseName,
+            version: "*",
+            sourceRef: { kind: "HelmRepository", name: sourceName, namespace: namespaceName },
+          },
+        },
+      },
+    }),
+    "kustomization.yaml": kustomization(["namespace.yaml", "source.yaml", "release.yaml"]),
+  };
+}
+
+function namespace(name) {
+  return yaml({
+    apiVersion: "v1",
+    kind: "Namespace",
+    metadata: { name },
+  });
+}
+
+function kustomization(resources) {
+  return yaml({
+    apiVersion: "kustomize.config.k8s.io/v1beta1",
+    kind: "Kustomization",
+    resources,
+  });
+}
+
+function yaml(document) {
+  return YAML.stringify(document, {
+    indent: 2,
+    lineWidth: 0,
+    sortMapEntries: false,
+  }).trimEnd();
+}
+
+function context(platform, options = {}) {
   const expansion = expandPlatform(platform);
   assert.equal(expansion.valid, true);
   const gatusGroup = expansion.platform.packs?.observability?.gatus !== undefined ? "observability" : "utility-system";
-  return {
+  const input = {
     artifacts: {
       ...expansion.artifacts,
       platform: expansion.platform,
@@ -31,6 +147,13 @@ function context(platform) {
     }),
     overrides: {},
   };
+  if (Object.hasOwn(options, "blueprintRegistry")) {
+    input.blueprintRegistry = options.blueprintRegistry;
+  } else {
+    input.blueprintRegistry = fixtureBlueprintRegistry;
+  }
+  if (options.diagnostics) input.diagnostics = options.diagnostics;
+  return input;
 }
 
 function parseDocuments(file) {
@@ -142,4 +265,13 @@ test("flux-packs composes blueprint manifests into consumer-owned paths", () => 
   assert.match(byPath.get("platform/cluster/flux/apps/observability/gatus/kustomization.yaml").content, /gatus-endpoints-configmap.yaml/);
   assert.doesNotMatch(files.map((file) => file.content).join("\n"), /\$\{[A-Z0-9_]+\}/);
   assert.deepEqual(renderFluxPacks(context(personalStack)), files);
+});
+
+test("flux-packs does not read implicit machine-local blueprints", () => {
+  const diagnostics = [];
+  const files = renderFluxPacks(context(personalStack, { blueprintRegistry: undefined, diagnostics }));
+
+  assert.equal(files.some((file) => file.path.includes("ingress-controller")), false);
+  assert.equal(diagnostics.length > 0, true);
+  assert.equal(diagnostics[0].code, "E_BLUEPRINT_REGISTRY_MISSING");
 });

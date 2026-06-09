@@ -3,8 +3,6 @@ import { posix } from "node:path";
 import YAML from "yaml";
 import { safeRelativePath } from "../render-plan/paths.js";
 
-export const defaultBlueprintRoot = "/workspace/platform-blueprints";
-
 export function contextArtifacts(input) {
   if (input?.artifacts) return input.artifacts;
   return { "deploy-config": input };
@@ -143,15 +141,54 @@ export function serviceHasDataDependency(artifacts, serviceName) {
 
 export function blueprintFiles(input, blueprintPath) {
   const registry = input?.blueprintRegistry;
-  if (registry?.files) return registry.files(blueprintPath);
-  if (registry?.readFiles) return registry.readFiles(blueprintPath);
+  const registryFiles = blueprintRegistryFiles(registry, blueprintPath);
+  if (registryFiles) return registryFiles;
 
-  const absolute = posix.join(defaultBlueprintRoot, blueprintPath);
+  const root = explicitBlueprintRoot(input);
+  if (!root) {
+    addBlueprintDiagnostic(input, blueprintPath);
+    return [];
+  }
+
+  const absolute = posix.join(root, blueprintPath);
   if (!existsSync(absolute)) return [];
   return walk(absolute).map((relativePath) => ({
     relativePath,
     content: readFileSync(posix.join(absolute, relativePath), "utf8"),
   }));
+}
+
+function blueprintRegistryFiles(registry, blueprintPath) {
+  if (!registry) return undefined;
+  if (typeof registry.files === "function") return normalizeBlueprintFiles(registry.files(blueprintPath));
+  if (typeof registry.readFiles === "function") return normalizeBlueprintFiles(registry.readFiles(blueprintPath));
+  if (registry instanceof Map) return normalizeBlueprintFiles(registry.get(blueprintPath));
+  return normalizeBlueprintFiles(registry[blueprintPath] ?? registry.packs?.[blueprintPath]);
+}
+
+function normalizeBlueprintFiles(files) {
+  if (!files) return undefined;
+  const entries = Array.isArray(files)
+    ? files
+    : Object.entries(files.files ?? files).map(([relativePath, content]) => ({ relativePath, content }));
+  return entries.map((file) => ({
+    relativePath: safeRelativePath(file.relativePath ?? file.path),
+    content: String(file.content),
+  })).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+function explicitBlueprintRoot(input) {
+  const overrides = overridesFromContext(input, "flux");
+  return overrides.blueprintRoot ?? overrides.blueprintPath;
+}
+
+function addBlueprintDiagnostic(input, blueprintPath) {
+  if (!Array.isArray(input?.diagnostics)) return;
+  input.diagnostics.push({
+    code: "E_BLUEPRINT_REGISTRY_MISSING",
+    path: blueprintPath,
+    message: `blueprint pack ${blueprintPath} requires blueprintRegistry or overrides.flux.blueprintRoot`,
+  });
 }
 
 export function substitutePlaceholders(content, substitutions) {

@@ -42,20 +42,20 @@ export function renderFluxPacks(input) {
 
   for (const packName of selectedCorePacks(platform)) {
     const component = componentName(platform, packName);
-    copyBlueprint(input, corePackBlueprints[packName], appPath(input, "core", component), substitutions, {
+    const copied = copyBlueprint(input, corePackBlueprints[packName], appPath(input, "core", component), substitutions, {
       skipSourceRelease: true,
       skipFiles: packName === "metallb" ? ["address-pool.yaml"] : [],
       addFile,
     });
-    addResource("core", component);
+    if (copied) addResource("core", component);
   }
   if (hasPack(platform, "metallb")) {
-    copyBlueprint(input, "packs/flux-core/metallb", appPath(input, "metallb-config"), substitutions, {
+    const copied = copyBlueprint(input, "packs/flux-core/metallb", appPath(input, "metallb-config"), substitutions, {
       onlyFiles: ["address-pool.yaml"],
       outputNames: { "address-pool.yaml": "config.yaml" },
       addFile,
     });
-    addFile(appPath(input, "metallb-config", "kustomization.yaml"), groupKustomization(["config.yaml"]));
+    if (copied) addFile(appPath(input, "metallb-config", "kustomization.yaml"), groupKustomization(["config.yaml"]));
   }
 
   if (shouldRenderEdgePack(platform, artifacts)) {
@@ -76,19 +76,19 @@ export function renderFluxPacks(input) {
     });
   }
   if (packValue(platform, "utility", "gatus") !== undefined || packValue(platform, "utility")?.gatus !== undefined) {
-    copyBlueprint(input, "packs/observability/gatus", appPath(input, "utility-system", "gatus"), substitutions, {
+    const copied = copyBlueprint(input, "packs/observability/gatus", appPath(input, "utility-system", "gatus"), substitutions, {
       addFile,
       transform: transformGatusKustomization,
     });
-    addResource("utility-system", "gatus");
+    if (copied) addResource("utility-system", "gatus");
   }
 
   if (hasPack(platform, "rabbitmq")) {
-    copyBlueprint(input, "packs/rabbitmq-data-service", appPath(input, "data", "rabbitmq"), substitutions, {
+    const copied = copyBlueprint(input, "packs/rabbitmq-data-service", appPath(input, "data", "rabbitmq"), substitutions, {
       skipSourceRelease: true,
       addFile,
     });
-    addResource("data", "rabbitmq");
+    if (copied) addResource("data", "rabbitmq");
   }
 
   if (hasPack(platform, "mariadb") || packValue(platform, "data", "mariadb") !== undefined) {
@@ -128,6 +128,7 @@ function shouldRenderEdgePack(platform, artifacts) {
 
 function copyBlueprint(input, blueprintPath, outputRoot, substitutions, options) {
   const sourceFiles = blueprintFiles(input, blueprintPath);
+  let copied = false;
   for (const file of sourceFiles) {
     if (options.onlyFiles && !options.onlyFiles.includes(file.relativePath)) continue;
     if ((options.skipFiles ?? []).includes(file.relativePath)) continue;
@@ -138,7 +139,9 @@ function copyBlueprint(input, blueprintPath, outputRoot, substitutions, options)
     const merged = mergeGroupKustomization(file.content, options.mergeKustomizationResources);
     const transformed = options.transform ? options.transform(relativePath, merged) : merged;
     options.addFile(outputPath, substitutePlaceholders(transformed, substitutions));
+    copied = true;
   }
+  return copied;
 }
 
 function outputRelativePath(relativePath) {
