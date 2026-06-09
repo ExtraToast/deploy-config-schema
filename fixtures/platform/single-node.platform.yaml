@@ -1,0 +1,68 @@
+version: 1
+name: website
+domain: example.net
+
+cluster:
+  kind: k3s
+  api: https://203.0.113.10:6443
+  bootstrap: frankfurt-contabo-1
+
+gitops:
+  root: platform/cluster/flux
+  environment: production
+  interval: 2m
+
+packs:
+  core:
+    - cert-manager
+    - external-dns
+    - traefik-public
+    - vso
+  utility:
+    gatus: {}
+
+hosts:
+  frankfurt-contabo-1:
+    site: frankfurt
+    system: x86_64-linux
+    roles:
+      - base
+      - k3s-control-plane
+      - k3s-worker
+    capabilities:
+      - public-ingress
+    ssh: deploy@203.0.113.10:2222
+    hostModule: platform/nix/hosts/frankfurt-contabo-1/default.nix
+
+services:
+  frontend:
+    image: ghcr.io/example/frontend:latest
+    port: 3000
+    route: root
+    health: /healthz
+    rollout: latest
+  api:
+    namespace: app-system
+    image: ghcr.io/example/api:1.0.0
+    port: 8080
+    route:
+      host: root
+      path: /api
+      sso: true
+      origin: edge_direct
+    health:
+      path: /actuator/health/readiness
+      expectedStatus: 200
+    env:
+      SPRING_PROFILES_ACTIVE: prod
+    secrets:
+      - ref: api-secrets
+        source: vso_static
+        env:
+          API_TOKEN: token
+    storage:
+      - name: api-storage
+        mount: /srv/storage
+        size: 10Gi
+        hostPath: /srv/example/storage
+        node: frankfurt-contabo-1

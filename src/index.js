@@ -1,6 +1,12 @@
 export { loadConfig } from "./config-loader.js";
 export { validateConfig } from "./validator.js";
 export { artifactKinds, validateArtifact } from "./artifact-validator.js";
+export { validatePlatform } from "./minimal/schema.js";
+export { canonicalArtifactNames, expandPlatform } from "./minimal/expand.js";
+export { adapterContract, adapterNames, getAdapter, listAdapters, registerAdapter } from "./adapters/registry.js";
+export { createRenderPlan, renderPlanFiles } from "./render-plan/plan.js";
+export { createPathAllocator } from "./render-plan/paths.js";
+export { generatedHeader, renderManagedContent, writeGeneratedFiles } from "./render-plan/writer.js";
 export { normalizeServiceIntentForRender } from "./service-intent-normalizer.js";
 export { renderTraefik } from "./adapters/traefik.js";
 export { renderEdgeCatalog, renderEdgeRouteCatalog } from "./adapters/catalog.js";
