@@ -480,7 +480,7 @@
         "consumes": {
           "type": "array",
           "items": {
-            "enum": ["fleet", "service_intent", "vault_inputs", "images", "origins", "sso"]
+            "enum": ["fleet", "service_intent", "vault_inputs", "images", "origins", "sso", "packs"]
           }
         },
         "output_ref": {

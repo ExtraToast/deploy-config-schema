@@ -835,7 +835,10 @@
         "gatus",
         "edge-catalog",
         "edge-route-catalog",
-        "image-metadata"
+        "image-metadata",
+        "flux-root",
+        "flux-packs",
+        "flux-source"
       ]
     }
   }

@@ -10,5 +10,8 @@ export { generatedHeader, renderManagedContent, writeGeneratedFiles } from "./re
 export { normalizeServiceIntentForRender } from "./service-intent-normalizer.js";
 export { renderTraefik } from "./adapters/traefik.js";
 export { renderEdgeCatalog, renderEdgeRouteCatalog } from "./adapters/catalog.js";
+export { renderFluxPacks } from "./adapters/flux-packs.js";
+export { renderFluxRoot } from "./adapters/flux-root.js";
+export { renderFluxSource } from "./adapters/flux-source.js";
 export { renderGatus } from "./adapters/gatus.js";
 export { renderImageMetadata } from "./adapters/image-metadata.js";

@@ -1,4 +1,7 @@
 import { renderEdgeCatalog, renderEdgeRouteCatalog } from "./catalog.js";
+import { renderFluxPacks } from "./flux-packs.js";
+import { renderFluxRoot } from "./flux-root.js";
+import { renderFluxSource } from "./flux-source.js";
 import { renderGatus } from "./gatus.js";
 import { renderImageMetadata } from "./image-metadata.js";
 import { renderTraefik } from "./traefik.js";
@@ -63,11 +66,35 @@ registerAdapter({
   render: renderImageMetadata,
 });
 
+registerAdapter({
+  name: "flux-root",
+  target: "flux",
+  input: "canonical-artifacts",
+  status: "implemented",
+  defaultPath: "platform/cluster/flux/clusters/production/kustomizations.yaml",
+  render: renderFluxRoot,
+});
+
+registerAdapter({
+  name: "flux-packs",
+  target: "flux",
+  input: "canonical-artifacts",
+  status: "implemented",
+  defaultPath: "platform/cluster/flux/apps",
+  render: renderFluxPacks,
+});
+
+registerAdapter({
+  name: "flux-source",
+  target: "flux",
+  input: "canonical-artifacts",
+  status: "implemented",
+  defaultPath: "platform/cluster/flux/apps",
+  render: renderFluxSource,
+});
+
 export const plannedAdapterContracts = Object.freeze([
   { name: "kubernetes", target: "kubernetes", input: "canonical-artifacts", status: "planned" },
-  { name: "flux-root", target: "flux", input: "canonical-artifacts", status: "planned" },
-  { name: "flux-packs", target: "flux", input: "canonical-artifacts", status: "planned" },
-  { name: "flux-source", target: "flux", input: "canonical-artifacts", status: "planned" },
   { name: "nix-hosts", target: "nix", input: "canonical-artifacts", status: "planned" },
   { name: "vso", target: "vault", input: "canonical-artifacts", status: "planned" }
 ]);
