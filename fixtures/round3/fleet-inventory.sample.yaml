@@ -1,0 +1,224 @@
+version: 1
+
+fleet:
+  cluster:
+    name: example-fleet
+    domain: example.net
+    platform: mixed
+    labels:
+      environment: production
+
+  sites:
+    edge-site:
+      kind: vps
+      purpose: public_edge
+      region: region-a
+      networking:
+        wan_address_ref: edge-wan-address
+        tailnet: true
+      labels:
+        tier: edge
+    home-site:
+      kind: home
+      purpose: lan_services
+      region: region-b
+      networking:
+        lan_cidrs:
+          - lan-primary
+        wan_address_ref: home-wan-address
+        lan_ingress_address_ref: home-lan-ingress
+        tailnet: true
+      labels:
+        tier: local
+
+  nodes:
+    edge-node-1:
+      status: active
+      site: edge-site
+      arch: amd64
+      roles:
+        - control-plane
+        - worker
+      capacity:
+        cpu_millicores: 8000
+        memory_mib: 16384
+      capabilities:
+        - public-ingress
+        - low-latency-edge
+      addresses:
+        management: edge-node-1.internal
+    media-node-1:
+      status: active
+      site: home-site
+      arch: amd64
+      roles:
+        - worker
+        - utility-host
+      capacity:
+        cpu_millicores: 32000
+        memory_mib: 32768
+        ephemeral_storage_mib: 102400
+      capabilities:
+        - lan-ingress
+        - media-storage
+        - batch-workloads
+      accelerators:
+        - vendor: generic-gpu
+          model: transcoder
+          class: media
+          count: 1
+      addresses:
+        management: media-node-1.internal
+
+  capabilities:
+    public-ingress:
+      description: Node can terminate public HTTP routes.
+      scope: node
+    lan-ingress:
+      description: Node can terminate LAN-only routes.
+      scope: node
+    media-storage:
+      description: Node has access to shared media paths.
+      scope: node
+    low-latency-edge:
+      description: Node is suitable for direct WebSocket origins.
+      scope: node
+    batch-workloads:
+      description: Node is suitable for scheduled workers.
+      scope: node
+
+  placement:
+    rules:
+      - name: public-edge-services
+        selector:
+          sites:
+            - edge-site
+          required_capabilities:
+            - public-ingress
+        applies_to:
+          - api-service
+          - spa-frontend
+          - websocket-replica
+        fallback: fail
+      - name: media-services
+        selector:
+          sites:
+            - home-site
+          required_capabilities:
+            - media-storage
+          accelerator_classes:
+            - media
+        applies_to:
+          - media-stateful
+        fallback: soft_preference
+
+  origins:
+    public-proxied:
+      kind: proxied_dns
+      provider: dns-provider
+      address_ref: public-ingress-cname
+      proxied: true
+      ttl: 5m
+    edge-direct:
+      kind: direct_wan
+      site: edge-site
+      address_ref: edge-wan-address
+      proxied: false
+    lan-direct:
+      kind: direct_lan
+      site: home-site
+      address_ref: home-lan-ingress
+      proxied: false
+    internal-service:
+      kind: internal_service
+      address_ref: cluster-service-dns
+
+  exposure:
+    classes:
+      public:
+        reachability: public
+        default_origin: public-proxied
+        renderer_hints:
+          - traefik-public
+          - edge-catalog
+      websocket_direct:
+        reachability: public
+        default_origin: edge-direct
+        renderer_hints:
+          - traefik-public
+      lan_only:
+        reachability: lan_only
+        default_origin: lan-direct
+        renderer_hints:
+          - traefik-lan
+      internal:
+        reachability: internal_only
+        default_origin: internal-service
+    services:
+      api-service:
+        class: public
+        host_label: api
+        sso_policy: browser-sso
+      spa-frontend:
+        class: public
+        host_label: root
+        sso_policy: none
+      websocket-replica:
+        class: websocket_direct
+        host_label: ws
+        origin: edge-direct
+        sso_policy: token-path
+      media-stateful:
+        class: lan_only
+        host_label: media
+        origin: lan-direct
+        sso_policy: browser-sso
+      worker-cron:
+        class: internal
+
+  sso:
+    policies:
+      none:
+        mode: none
+      browser-sso:
+        mode: forward_auth
+        provider_ref: primary-idp
+        bypass_paths:
+          - /health
+        required_claims:
+          roles:
+            - user
+      token-path:
+        mode: token
+        bypass_paths:
+          - /attach/health
+
+  renderer_targets:
+    - name: traefik-public
+      kind: traefik_routes
+      status: implemented
+      consumes:
+        - fleet
+        - origins
+        - sso
+      output_ref: public-routes
+    - name: gatus-endpoints
+      kind: gatus_endpoints
+      status: implemented
+      consumes:
+        - fleet
+        - service_intent
+      output_ref: health-probes
+    - name: vault-policy-inputs
+      kind: vault_policy_inputs
+      status: design_only
+      consumes:
+        - vault_inputs
+      output_ref: vault-contract
+    - name: nomad-jobs
+      kind: nomad_jobs
+      status: design_only
+      consumes:
+        - service_intent
+        - fleet
+      output_ref: nomad-contract

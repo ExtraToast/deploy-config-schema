@@ -8,14 +8,18 @@
   },
   "exports": {
     ".": "./src/index.js",
-    "./schema": "./schemas/deploy-config.schema.json"
+    "./schema": "./schemas/deploy-config.schema.json",
+    "./schemas/round3/service-intent": "./schemas/round3/service-intent.schema.json",
+    "./schemas/round3/fleet-inventory": "./schemas/round3/fleet-inventory.schema.json",
+    "./schemas/round3/vault-dynamic-secrets": "./schemas/round3/vault-dynamic-secrets.schema.json"
   },
   "files": [
     "bin/",
     "schemas/",
     "src/",
     "docs/",
-    "samples/"
+    "samples/",
+    "fixtures/"
   ],
   "scripts": {
     "test": "npm run test:coverage",

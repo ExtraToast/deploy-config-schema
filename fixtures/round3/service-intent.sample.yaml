@@ -1,0 +1,393 @@
+version: 1
+
+services:
+  api-service:
+    description: Browser-facing API with dynamic database credentials and SSO-aware route exceptions.
+    workload:
+      kind: deployment
+      replicas: 2
+      restart_policy: Always
+      strategy: rolling
+    image:
+      repository: registry.example.net/team/api-service
+      tag: latest
+      pull_policy: Always
+      pull_secrets:
+        - registry-readonly
+    ports:
+      - name: http
+        container_port: 8080
+        protocol: TCP
+        service_port: 80
+        exposure: public
+      - name: metrics
+        container_port: 9090
+        protocol: TCP
+        service_port: 9090
+        exposure: metrics
+    runtime:
+      env:
+        service_mode: production
+      env_from:
+        - name: api-runtime
+      init_containers:
+        - name: migrate
+          image:
+            repository: registry.example.net/team/api-migrator
+            tag: latest
+          args:
+            - run-migrations
+    secrets:
+      - name: api-runtime
+        source: vso_static
+        ref: api-kv
+        env_keys:
+          - jwt_public_config
+      - name: api-database
+        source: vault_dynamic_database
+        ref: api-db-role
+        lease:
+          default_ttl: 72h
+          max_ttl: 168h
+          rotation_mode: library_lifecycle
+      - name: api-jwt
+        source: vault_transit
+        ref: api-jwt
+    networking:
+      routes:
+        - name: api
+          host: api.example.net
+          port: http
+          paths:
+            - /api/
+          bypass_paths:
+            - /api/health
+          access: sso
+          origin: public-proxied
+        - name: api-health
+          host: api.example.net
+          port: http
+          paths:
+            - /api/health
+          access: direct
+          origin: public-proxied
+    gatus:
+      endpoints:
+        - name: api-health
+          type: http
+          port: http
+          path: /api/health
+          expected_status: 200
+          strategy: both
+          group: apps
+    observability:
+      metrics:
+        - kind: ServiceMonitor
+          port: metrics
+          path: /metrics
+          interval: 30s
+      tracing:
+        enabled: true
+        protocol: otlp_http
+    scheduling:
+      required_capabilities:
+        - public-ingress
+    rollout:
+      update_strategy: latest_tag
+      restart_triggers:
+        - image
+        - secret
+      availability:
+        pdb_min_available: 1
+    kubernetes:
+      namespace_ref: app-system
+      service_account_ref: api-service
+      render_status: design_only
+      resource_hints:
+        - Deployment
+        - Service
+        - IngressRoute
+        - ServiceMonitor
+
+  spa-frontend:
+    description: Static frontend with root host routing and no dynamic credential consumption.
+    workload:
+      kind: deployment
+      replicas: 2
+      restart_policy: Always
+    image:
+      repository: registry.example.net/team/spa-frontend
+      tag: latest
+      pull_policy: Always
+    ports:
+      - name: http
+        container_port: 8080
+        service_port: 80
+        exposure: public
+    networking:
+      routes:
+        - name: frontend
+          host: root
+          port: http
+          paths:
+            - /
+          access: direct
+          origin: public-proxied
+    rollout:
+      update_strategy: latest_tag
+      restart_triggers:
+        - image
+    kubernetes:
+      namespace_ref: app-system
+      render_status: design_only
+      resource_hints:
+        - Deployment
+        - Service
+        - IngressRoute
+
+  websocket-replica:
+    description: Alternate WebSocket route pinned to direct origin because proxy idle timeouts are workload-specific.
+    workload:
+      kind: deployment
+      replicas: 1
+      restart_policy: Always
+    image:
+      repository: registry.example.net/team/realtime-service
+      tag: latest
+    ports:
+      - name: websocket
+        container_port: 8081
+        service_port: 80
+        exposure: public
+    networking:
+      routes:
+        - name: websocket-direct
+          host: ws.example.net
+          port: websocket
+          paths:
+            - /attach/
+          access: token
+          origin: edge-direct
+          websocket: true
+    scheduling:
+      required_capabilities:
+        - low-latency-edge
+    kubernetes:
+      namespace_ref: app-system
+      render_status: design_only
+      resource_hints:
+        - Deployment
+        - Service
+        - IngressRoute
+
+  worker-cron:
+    description: Scheduled knowledge curation style worker with no external route.
+    workload:
+      kind: cronjob
+      schedule: "15 * * * *"
+      restart_policy: OnFailure
+    image:
+      repository: registry.example.net/team/worker
+      tag: latest
+    runtime:
+      args:
+        - curate
+    secrets:
+      - name: worker-database
+        source: vault_dynamic_database
+        ref: worker-db-role
+        lease:
+          default_ttl: 24h
+          max_ttl: 72h
+          rotation_mode: process_restart
+    scheduling:
+      required_capabilities:
+        - batch-workloads
+    kubernetes:
+      namespace_ref: worker-system
+      render_status: design_only
+      resource_hints:
+        - CronJob
+
+  media-stateful:
+    description: Stateful media-style workload with PVC, hostPath import, extra TCP probe, and direct LAN route.
+    workload:
+      kind: statefulset
+      replicas: 1
+      restart_policy: Always
+      strategy: recreate
+    image:
+      repository: registry.example.net/vendor/media-app
+      tag: "1.2.3"
+      pull_policy: IfNotPresent
+    ports:
+      - name: http
+        container_port: 8096
+        service_port: 80
+        exposure: lan
+      - name: auxiliary-tcp
+        container_port: 8920
+        service_port: 8920
+        exposure: internal
+    storage:
+      volumes:
+        - name: config
+          kind: pvc
+          size: 20Gi
+          access_modes:
+            - ReadWriteOnce
+        - name: library
+          kind: host_path
+          path: /srv/example/media-library
+      mounts:
+        - volume: config
+          path: /config
+        - volume: library
+          path: /media
+          read_only: true
+    networking:
+      routes:
+        - name: media
+          host: media.example.net
+          port: http
+          paths:
+            - /
+          access: sso
+          origin: lan-direct
+    gatus:
+      endpoints:
+        - name: media-web
+          type: http
+          port: http
+          path: /health
+          expected_status: 200
+          strategy: internal
+          group: media
+        - name: media-auxiliary
+          type: tcp
+          port: auxiliary-tcp
+          strategy: internal
+          group: media
+    scheduling:
+      site_affinity: home-site
+      required_capabilities:
+        - lan-ingress
+        - media-storage
+    kubernetes:
+      namespace_ref: content-system
+      render_status: design_only
+      resource_hints:
+        - StatefulSet
+        - Service
+        - PVC
+
+  mail-admin:
+    description: Mail/admin workload with root redirect, sidecar apply step, and multiple TCP probes.
+    workload:
+      kind: statefulset
+      replicas: 1
+      restart_policy: Always
+    image:
+      repository: registry.example.net/vendor/mail-service
+      tag: "2.0.0"
+    ports:
+      - name: admin
+        container_port: 8080
+        service_port: 80
+        exposure: public
+      - name: smtp
+        container_port: 25
+        service_port: 25
+        exposure: public
+      - name: imap
+        container_port: 993
+        service_port: 993
+        exposure: public
+    runtime:
+      sidecars:
+        - name: apply-config
+          image:
+            repository: registry.example.net/team/config-applier
+            tag: stable
+          args:
+            - apply
+    secrets:
+      - name: mail-platform
+        source: vso_static
+        ref: mail-kv
+        env_keys:
+          - admin_user
+          - admin_password
+    networking:
+      routes:
+        - name: mail-admin
+          host: mail-admin.example.net
+          port: admin
+          paths:
+            - /
+          access: sso
+          origin: public-proxied
+          root_redirect: /admin/
+    gatus:
+      endpoints:
+        - name: smtp
+          type: tcp
+          port: smtp
+          strategy: external
+          group: mail
+        - name: imap
+          type: tcp
+          port: imap
+          strategy: external
+          group: mail
+    kubernetes:
+      namespace_ref: messaging-system
+      render_status: design_only
+      resource_hints:
+        - StatefulSet
+        - Service
+        - IngressRoute
+        - VaultStaticSecret
+
+  future-nomad-worker:
+    description: Nomad input placeholder. This is not renderable in round 3.
+    workload:
+      kind: nomad_job
+      restart_policy: OnFailure
+    image:
+      repository: registry.example.net/team/batch-worker
+      tag: latest
+    nomad:
+      renderer_status: design_only
+      implementation_prerequisites:
+        - representative_input_fixture
+        - expected_output_fixture
+        - operator_review
+      datacenters:
+        - dc1
+      groups:
+        - name: batch
+          count: 1
+          tasks:
+            - name: worker
+              driver: docker
+              resources:
+                cpu_mhz: 500
+                memory_mb: 512
+              services:
+                - name: worker-metrics
+                  port: metrics
+                  checks:
+                    - name: metrics-health
+                      type: http
+                      port: metrics
+                      path: /health
+                      expected_status: 200
+          networks:
+            - name: metrics
+              container_port: 9100
+              service_port: 9100
+              exposure: internal
+
+notes:
+  - Nomad fields are contract placeholders and must not be rendered until representative fixtures exist.
