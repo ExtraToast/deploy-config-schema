@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.2.0...v0.3.0) (2026-06-09)
+
+
+### Features
+
+* kubernetes, flux (root/source/packs), nix-hosts, vso render adapters ([#13](https://github.com/ExtraToast/deploy-config-schema/issues/13)) ([fd08614](https://github.com/ExtraToast/deploy-config-schema/commit/fd08614bbf6497a7d0599e77d6cc83239873f869))
+* platform renderer Phase 0 — minimal platform.yaml, expansion, render-plan, CLI, adapter registry ([#11](https://github.com/ExtraToast/deploy-config-schema/issues/11)) ([8888607](https://github.com/ExtraToast/deploy-config-schema/commit/8888607671aa88af6f8896e3309dc78f9ab5a808))
+
 ## [0.2.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.1.0...v0.2.0) (2026-06-09)
 
 
