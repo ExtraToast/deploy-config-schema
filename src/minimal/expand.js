@@ -387,7 +387,7 @@ function addKeelMetadata(config) {
 }
 
 export function selectedExistingAdapters(platform) {
-  const adapters = new Set(["traefik-public", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata"]);
+  const adapters = new Set(["traefik-public", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata", "kubernetes", "nix-hosts", "vso"]);
   if (hasPack(platform, "traefik-lan") || serviceList(platform).some(([, service]) => serviceExposure(service) === "lan" || routeObject(service.route)?.exposure === "public_and_lan")) {
     adapters.add("traefik-lan");
   }
@@ -402,8 +402,11 @@ export function existingAdapterPaths(platform) {
     "edge-route-catalog": `${apps}/edge/edge-route-catalog-configmap.yaml`,
     gatus: `${apps}/utility-system/gatus/gatus-endpoints-configmap.yaml`,
     "image-metadata": `${apps}/edge/image-metadata.yaml`,
+    kubernetes: `${apps}`,
+    "nix-hosts": "platform",
     "traefik-lan": `${apps}/edge/traefik-lan-ingressroutes.yaml`,
     "traefik-public": `${apps}/edge/traefik-ingressroutes.yaml`,
+    vso: `${apps}/vso-secrets`,
   };
 }
 

@@ -130,7 +130,10 @@ test("adapter registry exposes implemented adapters and planned extension contra
 
   assert.ok(adapterNames().includes("traefik-public"));
   assert.ok(contract.implemented.some((adapter) => adapter.name === "gatus"));
-  assert.ok(contract.planned.some((adapter) => adapter.name === "kubernetes"));
+  assert.ok(contract.implemented.some((adapter) => adapter.name === "kubernetes"));
+  assert.ok(contract.implemented.some((adapter) => adapter.name === "nix-hosts"));
+  assert.ok(contract.implemented.some((adapter) => adapter.name === "vso"));
+  assert.equal(contract.planned.some((adapter) => adapter.name === "kubernetes"), false);
   assert.deepEqual(contract.context.artifacts, ["service-intent", "fleet-inventory", "vault-dynamic-secrets", "deploy-config"]);
 });
 

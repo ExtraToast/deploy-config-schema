@@ -31,13 +31,25 @@ export function createRenderPlan(expansion, options = {}) {
 
 export function renderPlanFiles(expansion, plan) {
   const deployConfig = expansion.artifacts["deploy-config"];
-  return plan.targets.map((target) => {
+  return plan.targets.flatMap((target) => {
     const adapter = getAdapter(target.adapter);
-    return {
+    if (adapter.input === "canonical-artifacts") {
+      return adapter.render({
+        artifacts: expansion.artifacts,
+        renderPlan: plan,
+        pathAllocator: createPathAllocator({
+          gitopsRoot: expansion.platform.gitops.root,
+          environment: expansion.platform.gitops.environment
+        }),
+        blueprintRegistry: {},
+        overrides: expansion.platform.overrides ?? {}
+      });
+    }
+    return [{
       path: target.path,
       adapter: target.adapter,
       content: adapter.render(deployConfig)
-    };
+    }];
   });
 }
 
