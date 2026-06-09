@@ -1,0 +1,103 @@
+version: 1
+
+renderer:
+  cluster_name: example-cluster
+  public_domain: example.net
+  adapters:
+    - traefik-public
+    - gatus
+    - edge-catalog
+    - edge-route-catalog
+    - image-metadata
+  namespaces:
+    gatus: observability-system
+  configmap_names:
+    gatus: service-intent-gatus-endpoints
+  ingress_defaults:
+    namespace: edge-system
+    public_ingress_class: traefik-public
+    lan_ingress_class: traefik-lan
+    entrypoint: websecure
+    tls: true
+    public_dns_target: ingress.example.net
+    sso_middleware: forward-auth
+
+services:
+  api-service:
+    description: Renderable API service using route and probe fields that map to the existing adapters.
+    workload:
+      kind: deployment
+      replicas: 2
+      restart_policy: Always
+    image:
+      repository: registry.example.net/team/api-service
+      tag: latest
+      pull_policy: Always
+      source: first_party
+    ports:
+      - name: http
+        container_port: 8080
+        service_port: 80
+        exposure: public
+      - name: metrics
+        container_port: 9090
+        service_port: 9090
+        exposure: metrics
+    networking:
+      routes:
+        - name: api-service
+          host: api.example.net
+          port: http
+          paths:
+            - /api/
+          bypass_paths:
+            - /api/health
+          access: sso
+          origin: public-proxied
+        - name: api-service-health
+          host: api.example.net
+          port: http
+          paths:
+            - /api/health
+          access: direct
+          origin: public-proxied
+    gatus:
+      endpoints:
+        - name: api-health
+          type: http
+          port: http
+          path: /api/health
+          expected_status: 200
+          strategy: both
+          group: apps
+    rollout:
+      update_strategy: latest_tag
+      restart_triggers:
+        - image
+    kubernetes:
+      namespace_ref: app-system
+      service_ref: api-service
+      render_status: candidate
+      resource_hints:
+        - Deployment
+        - Service
+        - IngressRoute
+
+  worker-cron:
+    description: Validate-only cron workload that contributes image metadata but no routes.
+    workload:
+      kind: cronjob
+      schedule: "15 * * * *"
+      restart_policy: OnFailure
+    image:
+      repository: registry.example.net/team/worker
+      tag: "1.4.2"
+      source: first_party
+    runtime:
+      args:
+        - process
+    kubernetes:
+      namespace_ref: worker-system
+      render_status: design_only
+      resource_hints:
+        - CronJob

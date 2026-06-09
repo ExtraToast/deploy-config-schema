@@ -21,6 +21,9 @@
         "$ref": "#/$defs/serviceProfile"
       }
     },
+    "renderer": {
+      "$ref": "#/$defs/renderer"
+    },
     "notes": {
       "type": "array",
       "items": {
@@ -40,6 +43,10 @@
     "path": {
       "type": "string",
       "pattern": "^/"
+    },
+    "hostname": {
+      "type": "string",
+      "pattern": "^(root|[a-z0-9][a-z0-9.-]*[a-z0-9])$"
     },
     "duration": {
       "type": "string",
@@ -153,6 +160,9 @@
           "items": {
             "$ref": "#/$defs/identifier"
           }
+        },
+        "source": {
+          "enum": ["first_party", "third_party", "generated", "external"]
         }
       }
     },
@@ -597,6 +607,9 @@
         "service_account_ref": {
           "$ref": "#/$defs/identifier"
         },
+        "service_ref": {
+          "$ref": "#/$defs/identifier"
+        },
         "render_status": {
           "enum": ["design_only", "candidate", "implemented_elsewhere"]
         },
@@ -754,6 +767,82 @@
         },
         "change_mode": {
           "enum": ["noop", "signal", "restart", "script"]
+        }
+      }
+    },
+    "renderer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cluster_name": {
+          "$ref": "#/$defs/identifier"
+        },
+        "public_domain": {
+          "$ref": "#/$defs/hostname"
+        },
+        "host_native_node": {
+          "$ref": "#/$defs/identifier"
+        },
+        "adapters": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["traefik-public", "traefik-lan", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata"]
+          }
+        },
+        "output_paths": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "namespaces": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "configmap_names": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/identifier"
+          }
+        },
+        "ingress_defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "namespace": {
+              "$ref": "#/$defs/identifier"
+            },
+            "public_ingress_class": {
+              "$ref": "#/$defs/identifier"
+            },
+            "lan_ingress_class": {
+              "$ref": "#/$defs/identifier"
+            },
+            "entrypoint": {
+              "$ref": "#/$defs/identifier"
+            },
+            "tls": {
+              "type": "boolean"
+            },
+            "public_dns_target": {
+              "$ref": "#/$defs/hostname"
+            },
+            "sso_middleware": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
         }
       }
     }

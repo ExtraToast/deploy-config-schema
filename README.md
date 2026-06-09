@@ -18,10 +18,24 @@ Validate a config document:
 npx deploy-config-schema validate samples/deploy-config.yaml
 ```
 
+Validate a standalone Round 4 artifact:
+
+```bash
+npx deploy-config-schema validate service-intent fixtures/round4/service-intent-renderable.sample.yaml
+npx deploy-config-schema validate fleet-inventory fixtures/round3/fleet-inventory.sample.yaml
+npx deploy-config-schema validate vault-dynamic-secrets fixtures/round3/vault-dynamic-secrets.sample.yaml
+```
+
 Render public Traefik IngressRoutes:
 
 ```bash
 npx deploy-config-schema render traefik-public samples/deploy-config.yaml
+```
+
+Render generic route/probe/catalog/image outputs from service-intent input:
+
+```bash
+npx deploy-config-schema render gatus fixtures/round4/service-intent-renderable.sample.yaml --input service-intent
 ```
 
 Write rendered output to a path:
@@ -54,3 +68,5 @@ npm run render:sample
 ## Boundaries
 
 This repository defines a versioned schema and command surface. It does not apply generated manifests, modify personal-stack or website, operate a cluster, manage secrets, or render Nomad jobs. personal-stack and website are first-class optional consumers that can adopt pinned package versions when their own repositories opt in.
+
+Round 4 keeps Nomad contract-only: service-intent and fleet-inventory files may validate future Nomad input skeletons, but no Nomad renderer adapter is exposed. Vault dynamic-secret files are validated as compiler inputs only; policy compilation remains outside this package.

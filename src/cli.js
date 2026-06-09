@@ -2,6 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { loadConfig, ConfigLoadError } from "./config-loader.js";
 import { validateConfig } from "./validator.js";
+import { artifactKinds, isArtifactKind, validateArtifact } from "./artifact-validator.js";
+import { normalizeServiceIntentForRender } from "./service-intent-normalizer.js";
 import { renderTraefik } from "./adapters/traefik.js";
 import { renderEdgeCatalog, renderEdgeRouteCatalog } from "./adapters/catalog.js";
 import { renderGatus } from "./adapters/gatus.js";
@@ -35,12 +37,19 @@ export async function runCli(args, streams = { stdout: process.stdout, stderr: p
 
 function runValidate(args, streams) {
   const { positionals, options, diagnostics } = parseOptions(args);
-  if (diagnostics.length > 0 || positionals.length !== 1) {
-    writeDiagnostics(streams.stderr, diagnostics.length > 0 ? diagnostics : usageDiagnostic("validate <config>"));
+  const artifactKind = positionals.length === 2 && isArtifactKind(positionals[0])
+    ? positionals[0]
+    : options.input ?? "deploy-config";
+  const configPath = positionals.length === 2 && isArtifactKind(positionals[0])
+    ? positionals[1]
+    : positionals[0];
+
+  if (diagnostics.length > 0 || positionals.length < 1 || positionals.length > 2 || (positionals.length === 2 && !isArtifactKind(positionals[0]))) {
+    writeDiagnostics(streams.stderr, diagnostics.length > 0 ? diagnostics : usageDiagnostic("validate [artifact-kind] <config>"));
     return 1;
   }
 
-  const loaded = loadAndValidate(positionals[0]);
+  const loaded = loadAndValidate(configPath, artifactKind);
   if (!loaded.valid) {
     writeValidationResult(streams.stdout, loaded);
     return 1;
@@ -62,6 +71,17 @@ function runRender(args, streams) {
   }
 
   const [adapter, configPath] = positionals;
+  const inputKind = options.input ?? "deploy-config";
+  if (!["deploy-config", "service-intent"].includes(inputKind)) {
+    writeDiagnostics(streams.stderr, [
+      {
+        code: "E_INPUT_UNSUPPORTED",
+        message: `render input must be deploy-config or service-intent`,
+        path: "/",
+      },
+    ]);
+    return 1;
+  }
   if (!allAdapters.has(adapter)) {
     writeDiagnostics(streams.stderr, [
       {
@@ -73,13 +93,27 @@ function runRender(args, streams) {
     return 1;
   }
 
-  const loaded = loadAndValidate(configPath);
+  const loaded = loadAndValidate(configPath, inputKind);
   if (!loaded.valid) {
     writeValidationResult(streams.stderr, loaded);
     return 1;
   }
+  if (inputKind === "service-intent" && !loaded.config.renderer?.public_domain) {
+    writeDiagnostics(streams.stderr, [
+      {
+        code: "E_RENDERER_DOMAIN_REQUIRED",
+        message: "service-intent rendering requires renderer.public_domain",
+        path: "/renderer/public_domain",
+      },
+    ]);
+    return 1;
+  }
 
-  if (!loaded.config.adapter_output_intent.adapters.includes(adapter)) {
+  const config = inputKind === "service-intent"
+    ? normalizeServiceIntentForRender(loaded.config)
+    : loaded.config;
+
+  if (!config.adapter_output_intent.adapters.includes(adapter)) {
     writeDiagnostics(streams.stderr, [
       {
         code: "E_ADAPTER_NOT_SELECTED",
@@ -90,7 +124,7 @@ function runRender(args, streams) {
     return 1;
   }
 
-  const rendered = renderAdapter(loaded.config, adapter);
+  const rendered = renderAdapter(config, adapter);
   writeOutput(rendered, options.output, streams.stdout);
   return 0;
 }
@@ -113,10 +147,10 @@ function renderAdapter(config, adapter) {
   }
 }
 
-function loadAndValidate(path) {
+function loadAndValidate(path, kind = "deploy-config") {
   try {
     const config = loadConfig(path);
-    const validation = validateConfig(config);
+    const validation = kind === "deploy-config" ? validateConfig(config) : validateArtifact(kind, config);
     return {
       ...validation,
       config,
@@ -163,6 +197,18 @@ function parseOptions(args) {
         });
       } else {
         options.format = value;
+        index += 1;
+      }
+    } else if (arg === "--input") {
+      const value = args[index + 1];
+      if (!artifactKinds.includes(value)) {
+        diagnostics.push({
+          code: "E_USAGE",
+          message: `--input must be one of: ${artifactKinds.join(", ")}`,
+          path: "/",
+        });
+      } else {
+        options.input = value;
         index += 1;
       }
     } else if (arg.startsWith("--")) {
@@ -214,7 +260,11 @@ function usage() {
   return [
     "Usage:",
     "  deploy-config-schema validate <config> [--format json|text]",
-    "  deploy-config-schema render <adapter> <config> [--output <path>]",
+    "  deploy-config-schema validate <artifact-kind> <config> [--format json|text]",
+    "  deploy-config-schema render <adapter> <config> [--input deploy-config|service-intent] [--output <path>]",
+    "",
+    "Artifact kinds:",
+    `  ${artifactKinds.join(", ")}`,
     "",
     "Adapters:",
     "  traefik-public",
