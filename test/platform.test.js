@@ -154,10 +154,55 @@ test("CLI platform commands validate, expand, plan, and render tree", async () =
   assert.equal(await runCli(["render-plan", initPath, "--target", "edge"], { stdout: planStdout, stderr }), 0);
   assert.equal(await runCli(["render-tree", initPath, "--output", renderRoot], { stdout: renderStdout, stderr }), 0);
 
-  assert.deepEqual(JSON.parse(validateStdout.text()), { valid: true, diagnostics: [] });
+  assert.equal(JSON.parse(validateStdout.text()).valid, true);
+  assert.equal(JSON.parse(validateStdout.text()).results[0].kind, "platform");
   assert.match(planStdout.text(), /traefik-public/);
   assert.ok(existsSync(join(root, ".render", "service-intent.generated.yaml")));
   assert.ok(readFileSync(join(renderRoot, "platform/cluster/flux/apps/edge/traefik-ingressroutes.yaml"), "utf8").startsWith(generatedHeader));
+});
+
+test("CLI render-tree --check reports deterministic generated tree drift", async () => {
+  const root = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));
+  const writeStdout = stream();
+  const cleanStdout = stream();
+  const driftStdout = stream();
+  const stderr = stream();
+
+  assert.equal(await runCli([
+    "render-tree",
+    "fixtures/platform/single-node.platform.yaml",
+    "--output",
+    root,
+    "--target",
+    "traefik-public",
+  ], { stdout: writeStdout, stderr }), 0);
+  assert.equal(await runCli([
+    "render-tree",
+    "fixtures/platform/single-node.platform.yaml",
+    "--output",
+    root,
+    "--target",
+    "traefik-public",
+    "--check",
+  ], { stdout: cleanStdout, stderr }), 0);
+
+  writeFileSync(
+    join(root, "platform/cluster/flux/apps/edge/traefik-ingressroutes.yaml"),
+    `${generatedHeader}\nchanged: true\n`,
+  );
+  const driftExitCode = await runCli([
+    "render-tree",
+    "fixtures/platform/single-node.platform.yaml",
+    "--output",
+    root,
+    "--target",
+    "traefik-public",
+    "--check",
+  ], { stdout: driftStdout, stderr });
+
+  assert.equal(driftExitCode, 1);
+  assert.equal(JSON.parse(cleanStdout.text()).ok, true);
+  assert.equal(JSON.parse(driftStdout.text()).diagnostics[0].code, "E_RENDER_DIFF");
 });
 
 test("CLI render-tree refuses unmanaged files unless forced", async () => {

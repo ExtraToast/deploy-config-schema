@@ -167,7 +167,8 @@ test("CLI validates standalone artifacts and renders service-intent through impl
 
   assert.equal(validateExitCode, 0);
   assert.equal(validateStderr.text(), "");
-  assert.deepEqual(JSON.parse(validateStdout.text()), { valid: true, diagnostics: [] });
+  assert.equal(JSON.parse(validateStdout.text()).valid, true);
+  assert.equal(JSON.parse(validateStdout.text()).results[0].kind, "service-intent");
   assert.equal(renderExitCode, 0);
   assert.equal(renderStderr.text(), "");
   assert.match(renderStdout.text(), /name: service-intent-gatus-endpoints/);

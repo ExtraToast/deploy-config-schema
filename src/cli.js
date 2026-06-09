@@ -59,28 +59,26 @@ export async function runCli(args, streams = { stdout: process.stdout, stderr: p
 
 function runValidate(args, streams) {
   const { positionals, options, diagnostics } = parseOptions(args);
-  const artifactKind = positionals.length === 2 && isValidationKind(positionals[0])
-    ? positionals[0]
-    : options.input ?? "deploy-config";
-  const configPath = positionals.length === 2 && isValidationKind(positionals[0])
-    ? positionals[1]
-    : positionals[0];
+  const explicitKind = isValidationKind(positionals[0]) || positionals[0] === "auto" ? positionals[0] : undefined;
+  const artifactKind = explicitKind ?? options.input ?? "deploy-config";
+  const configPaths = explicitKind ? positionals.slice(1) : positionals;
 
-  if (diagnostics.length > 0 || positionals.length < 1 || positionals.length > 2 || (positionals.length === 2 && !isValidationKind(positionals[0]))) {
-    writeDiagnostics(streams.stderr, diagnostics.length > 0 ? diagnostics : usageDiagnostic("validate [artifact-kind] <config>"));
+  if (diagnostics.length > 0 || configPaths.length < 1) {
+    writeDiagnostics(streams.stderr, diagnostics.length > 0 ? diagnostics : usageDiagnostic("validate <kind|auto> <file...>"));
     return 1;
   }
 
-  const loaded = loadAndValidate(configPath, artifactKind);
-  if (!loaded.valid) {
-    writeValidationResult(streams.stdout, loaded);
+  const result = validateFiles(configPaths, artifactKind);
+  if (!result.valid) {
+    writeValidationResult(streams.stdout, result);
     return 1;
   }
 
   if (options.format === "text") {
-    streams.stdout.write("valid\n");
+    streams.stdout.write(result.results.map((fileResult) => `${fileResult.kind} ${fileResult.file}: valid`).join("\n"));
+    streams.stdout.write("\n");
   } else {
-    writeValidationResult(streams.stdout, loaded);
+    writeValidationResult(streams.stdout, result);
   }
   return 0;
 }
@@ -163,7 +161,7 @@ function runRenderTree(args, streams) {
   const result = writeGeneratedFiles(files, {
     root: options.output ?? ".",
     dryRun: options.dryRun,
-    diff: options.diff,
+    diff: options.diff || options.check,
     force: options.force,
   });
   const response = {
@@ -242,10 +240,55 @@ function runRender(args, streams) {
   return 0;
 }
 
+function validateFiles(paths, kind) {
+  const results = paths.map((path) => {
+    const loaded = kind === "auto" ? loadAndValidateAuto(path) : loadAndValidate(path, kind);
+    return {
+      file: path,
+      kind: loaded.kind ?? kind,
+      valid: loaded.valid,
+      diagnostics: loaded.diagnostics,
+    };
+  });
+  return {
+    valid: results.every((result) => result.valid),
+    diagnostics: results.flatMap((result) => result.diagnostics.map((diagnostic) => ({
+      ...diagnostic,
+      file: result.file,
+      kind: result.kind,
+    }))),
+    results,
+  };
+}
+
 function renderAdapter(config, adapter) {
   const definition = getAdapter(adapter);
   if (!definition) throw new Error(`unsupported adapter: ${adapter}`);
   return definition.render(config);
+}
+
+function loadAndValidateAuto(path) {
+  try {
+    const config = loadConfig(path);
+    const kind = inferValidationKind(path, config);
+    const validation = kind === "platform"
+      ? validatePlatform(config)
+      : kind === "deploy-config" ? validateConfig(config) : validateArtifact(kind, config);
+    return {
+      ...validation,
+      kind,
+      config,
+    };
+  } catch (error) {
+    if (error instanceof ConfigLoadError) {
+      return {
+        valid: false,
+        kind: inferValidationKindFromPath(path) ?? "auto",
+        diagnostics: error.diagnostics,
+      };
+    }
+    throw error;
+  }
 }
 
 function loadAndValidate(path, kind = "deploy-config") {
@@ -267,6 +310,33 @@ function loadAndValidate(path, kind = "deploy-config") {
     }
     throw error;
   }
+}
+
+function inferValidationKind(path, document) {
+  return inferValidationKindFromPath(path)
+    ?? inferValidationKindFromDocument(document)
+    ?? "deploy-config";
+}
+
+function inferValidationKindFromPath(path) {
+  const normalized = path.replaceAll("\\", "/").split("/").at(-1) ?? path;
+  if (/platform\.ya?ml$|platform\.json$/i.test(normalized)) return "platform";
+  if (/deploy-config\.ya?ml$|deploy-config\.json$/i.test(normalized)) return "deploy-config";
+  for (const kind of artifactKinds) {
+    const escaped = kind.replaceAll("-", "[-_]");
+    if (new RegExp(`${escaped}(\\.sample)?\\.(ya?ml|json)$`, "i").test(normalized)) return kind;
+  }
+  return undefined;
+}
+
+function inferValidationKindFromDocument(document) {
+  if (document?.fleet) return "fleet-inventory";
+  if (document?.vault) return "vault-dynamic-secrets";
+  if (document?.cluster && document?.service_intent) return "deploy-config";
+  if (document?.name && document?.domain) return "platform";
+  if (document?.services && !document?.cluster) return "service-intent";
+  if (document?.hosts || document?.packs) return "platform";
+  return undefined;
 }
 
 function loadValidateAndExpand(path) {
@@ -373,6 +443,8 @@ function parseOptions(args) {
       options.dryRun = true;
     } else if (arg === "--diff") {
       options.diff = true;
+    } else if (arg === "--check") {
+      options.check = true;
     } else if (arg.startsWith("--")) {
       diagnostics.push({
         code: "E_USAGE",
@@ -413,7 +485,7 @@ function writeOutput(rendered, outputPath, stdout) {
 }
 
 function writeValidationResult(stream, validation) {
-  stream.write(`${JSON.stringify({ valid: validation.valid, diagnostics: validation.diagnostics }, null, 2)}\n`);
+  stream.write(`${JSON.stringify(validation, null, 2)}\n`);
 }
 
 function writeDiagnostics(stream, diagnostics) {
@@ -436,13 +508,11 @@ function usageDiagnostic(command) {
 function usage() {
   return [
     "Usage:",
-    "  deploy-config-schema validate <config> [--format json|text]",
-    "  deploy-config-schema validate <artifact-kind> <config> [--format json|text]",
-    "  deploy-config-schema validate platform <config> [--format json|text]",
+    "  deploy-config-schema validate <kind|auto> <file...> [--format json|text]",
     "  deploy-config-schema init platform --template single-node|multi-site --output <path>",
     "  deploy-config-schema expand <platform.yaml> [--output <dir>]",
     "  deploy-config-schema render-plan <platform.yaml> [--target edge|adapter] [--output <root>]",
-    "  deploy-config-schema render-tree <platform.yaml> --output <root> [--target edge|adapter] [--dry-run|--diff|--force]",
+    "  deploy-config-schema render-tree <platform.yaml> --output <root> [--target edge|adapter] [--dry-run|--diff|--check|--force]",
     "  deploy-config-schema render <adapter> <config> [--input deploy-config|service-intent] [--output <path>]",
     "  deploy-config-schema adapter-contract",
     "",

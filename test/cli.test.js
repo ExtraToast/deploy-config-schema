@@ -56,22 +56,58 @@ test("validate command emits structured success", async () => {
   const stdout = stream();
   const stderr = stream();
 
-  const exitCode = await runCli(["validate", "samples/deploy-config.yaml"], { stdout, stderr });
+  const exitCode = await runCli(["validate", "deploy-config", "samples/deploy-config.yaml"], { stdout, stderr });
 
   assert.equal(exitCode, 0);
   assert.equal(stderr.text(), "");
-  assert.deepEqual(JSON.parse(stdout.text()), { valid: true, diagnostics: [] });
+  const result = JSON.parse(stdout.text());
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.diagnostics, []);
+  assert.deepEqual(result.results[0], {
+    file: "samples/deploy-config.yaml",
+    kind: "deploy-config",
+    valid: true,
+    diagnostics: [],
+  });
 });
 
 test("validate command supports text output", async () => {
   const stdout = stream();
   const stderr = stream();
 
-  const exitCode = await runCli(["validate", "samples/deploy-config.yaml", "--format", "text"], { stdout, stderr });
+  const exitCode = await runCli(["validate", "deploy-config", "samples/deploy-config.yaml", "--format", "text"], { stdout, stderr });
 
   assert.equal(exitCode, 0);
-  assert.equal(stdout.text(), "valid\n");
+  assert.equal(stdout.text(), "deploy-config samples/deploy-config.yaml: valid\n");
   assert.equal(stderr.text(), "");
+});
+
+test("validate command supports auto kind inference and multiple files", async () => {
+  const stdout = stream();
+  const stderr = stream();
+  const arbitraryPlatformPath = tempFile("config.yaml", readFileSync(new URL("../fixtures/platform/single-node.platform.yaml", import.meta.url), "utf8"));
+
+  const exitCode = await runCli([
+    "validate",
+    "auto",
+    arbitraryPlatformPath,
+    "fixtures/round4/service-intent-renderable.sample.yaml",
+    "fixtures/round3/fleet-inventory.sample.yaml",
+    "fixtures/round3/vault-dynamic-secrets.sample.yaml",
+  ], { stdout, stderr });
+
+  const result = JSON.parse(stdout.text());
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.text(), "");
+  assert.deepEqual(result.results.map((item) => item.kind), [
+    "platform",
+    "service-intent",
+    "fleet-inventory",
+    "vault-dynamic-secrets",
+  ]);
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.diagnostics, []);
 });
 
 test("validate command reports malformed config diagnostics", async () => {
@@ -79,11 +115,16 @@ test("validate command reports malformed config diagnostics", async () => {
   const stderr = stream();
   const configPath = tempFile("broken.yaml", "version: [\n");
 
-  const exitCode = await runCli(["validate", configPath], { stdout, stderr });
+  const exitCode = await runCli(["validate", "auto", configPath], { stdout, stderr });
+  const result = JSON.parse(stdout.text());
 
   assert.equal(exitCode, 1);
   assert.equal(stderr.text(), "");
-  assert.equal(parseDiagnostic(stdout.text()).code, "E_PARSE");
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code, "E_PARSE");
+  assert.equal(result.diagnostics[0].file, configPath);
+  assert.equal(result.results[0].kind, "auto");
+  assert.equal(result.results[0].valid, false);
 });
 
 test("render command writes deterministic output to a requested path", async () => {
@@ -131,7 +172,7 @@ test("usage errors are reported for invalid commands and options", async () => {
     stderr: unknownCommandStderr,
   });
   const badFormatExitCode = await runCli(
-    ["validate", "samples/deploy-config.yaml", "--format", "xml"],
+    ["validate", "deploy-config", "samples/deploy-config.yaml", "--format", "xml"],
     { stdout: badFormatStdout, stderr: badFormatStderr },
   );
   const missingOutputExitCode = await runCli(
@@ -139,7 +180,7 @@ test("usage errors are reported for invalid commands and options", async () => {
     { stdout: missingOutputStdout, stderr: missingOutputStderr },
   );
   const unknownOptionExitCode = await runCli(
-    ["validate", "samples/deploy-config.yaml", "--bad-option"],
+    ["validate", "deploy-config", "samples/deploy-config.yaml", "--bad-option"],
     { stdout: unknownOptionStdout, stderr: unknownOptionStderr },
   );
 

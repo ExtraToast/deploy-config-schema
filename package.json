@@ -24,10 +24,12 @@
   ],
   "scripts": {
     "test": "npm run test:coverage",
-    "test:coverage": "c8 --all --include \"src/**/*.js\" --check-coverage --lines 80 node --test",
+    "test:coverage": "c8 --all --include \"src/**/*.js\" --check-coverage --lines 90 --branches 80 node --test",
     "test:unit": "node --test",
     "validate:schema": "node scripts/validate-schema.js",
-    "validate:sample": "node bin/deploy-config-schema.js validate samples/deploy-config.yaml",
+    "validate:sample": "node bin/deploy-config-schema.js validate auto samples/deploy-config.yaml fixtures/platform/single-node.platform.yaml fixtures/round4/service-intent-renderable.sample.yaml fixtures/round3/fleet-inventory.sample.yaml fixtures/round3/vault-dynamic-secrets.sample.yaml",
+    "validate:artifacts": "node bin/deploy-config-schema.js validate auto",
+    "check-drift": "node bin/deploy-config-schema.js render-tree --check",
     "render:sample": "node bin/deploy-config-schema.js render traefik-public samples/deploy-config.yaml"
   },
   "keywords": [
