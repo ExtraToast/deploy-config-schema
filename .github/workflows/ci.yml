@@ -46,10 +46,17 @@ jobs:
       - run: node bin/deploy-config-schema.js render edge-route-catalog samples/deploy-config.yaml > /tmp/edge-route-catalog-configmap.yaml
       - run: node bin/deploy-config-schema.js render image-metadata samples/deploy-config.yaml > /tmp/image-metadata.yaml
 
+  workflow-lint:
+    name: Workflow Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rhysd/actionlint@v1
+
   pipeline-complete:
     name: Pipeline Complete
     if: always()
-    needs: [test, schema-and-cli]
+    needs: [test, schema-and-cli, workflow-lint]
     runs-on: ubuntu-latest
     steps:
       - uses: re-actors/alls-green@release/v1
