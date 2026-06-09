@@ -51,7 +51,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: rhysd/actionlint@v1
+      - name: Download actionlint
+        id: actionlint
+        shell: bash
+        run: bash <(curl --fail --silent --show-error --location https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+      - name: Lint GitHub Actions workflows
+        shell: bash
+        run: |
+          "${{ steps.actionlint.outputs.executable }}" -color .github/workflows/*.yml
 
   pipeline-complete:
     name: Pipeline Complete
