@@ -4,6 +4,7 @@ export function createPathAllocator(options = {}) {
   const gitopsRoot = trimSlashes(options.gitopsRoot ?? "platform/cluster/flux");
   const environment = options.environment ?? "production";
   const appsRoot = posix.join(gitopsRoot, "apps");
+  const gatusGroup = options.gatusGroup ?? "utility-system";
 
   return Object.freeze({
     gitopsRoot,
@@ -14,10 +15,13 @@ export function createPathAllocator(options = {}) {
       const known = {
         "edge-catalog": posix.join(appsRoot, "edge", "edge-catalog-configmap.yaml"),
         "edge-route-catalog": posix.join(appsRoot, "edge", "edge-route-catalog-configmap.yaml"),
-        gatus: posix.join(appsRoot, "utility-system", "gatus", "gatus-endpoints-configmap.yaml"),
+        gatus: posix.join(appsRoot, gatusGroup, "gatus", "gatus-endpoints-configmap.yaml"),
         "image-metadata": posix.join(appsRoot, "edge", "image-metadata.yaml"),
+        kubernetes: appsRoot,
+        "nix-hosts": "platform",
         "traefik-lan": posix.join(appsRoot, "edge", "traefik-lan-ingressroutes.yaml"),
-        "traefik-public": posix.join(appsRoot, "edge", "traefik-ingressroutes.yaml")
+        "traefik-public": posix.join(appsRoot, "edge", "traefik-ingressroutes.yaml"),
+        vso: posix.join(appsRoot, "vso-secrets")
       };
       return known[adapterName];
     }

@@ -387,7 +387,7 @@ function addKeelMetadata(config) {
 }
 
 export function selectedExistingAdapters(platform) {
-  const adapters = new Set(["traefik-public", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata"]);
+  const adapters = new Set(["traefik-public", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata", "kubernetes", "nix-hosts", "vso", "flux-root", "flux-source", "flux-packs"]);
   if (hasPack(platform, "traefik-lan") || serviceList(platform).some(([, service]) => serviceExposure(service) === "lan" || routeObject(service.route)?.exposure === "public_and_lan")) {
     adapters.add("traefik-lan");
   }
@@ -397,13 +397,20 @@ export function selectedExistingAdapters(platform) {
 export function existingAdapterPaths(platform) {
   const root = platform.gitops?.root ?? "platform/cluster/flux";
   const apps = `${root}/apps`;
+  const gatusGroup = platform.packs?.observability?.gatus !== undefined ? "observability" : "utility-system";
   return {
     "edge-catalog": `${apps}/edge/edge-catalog-configmap.yaml`,
     "edge-route-catalog": `${apps}/edge/edge-route-catalog-configmap.yaml`,
-    gatus: `${apps}/utility-system/gatus/gatus-endpoints-configmap.yaml`,
+    "flux-packs": `${apps}`,
+    "flux-root": `${root}/clusters/${platform.gitops?.environment ?? "production"}/kustomizations.yaml`,
+    "flux-source": `${apps}`,
+    gatus: `${apps}/${gatusGroup}/gatus/gatus-endpoints-configmap.yaml`,
     "image-metadata": `${apps}/edge/image-metadata.yaml`,
+    kubernetes: `${apps}`,
+    "nix-hosts": "platform",
     "traefik-lan": `${apps}/edge/traefik-lan-ingressroutes.yaml`,
     "traefik-public": `${apps}/edge/traefik-ingressroutes.yaml`,
+    vso: `${apps}/vso-secrets`,
   };
 }
 
@@ -571,7 +578,9 @@ function rendererTargets(platform) {
     { name: "edge-catalog", kind: "edge_catalog", status: "implemented", consumes: ["fleet", "service_intent"], output_ref: "edge-catalog" },
     { name: "image-metadata", kind: "image_metadata", status: "implemented", consumes: ["images"], output_ref: "image-metadata" },
     { name: "kubernetes-workloads", kind: "kubernetes_workloads", status: "design_only", consumes: ["service_intent", "vault_inputs"], output_ref: "kubernetes-workloads" },
-    { name: "flux-root", kind: "custom", status: "design_only", consumes: ["fleet"], output_ref: "flux-root" },
+    { name: "flux-root", kind: "custom", status: "implemented", consumes: ["fleet"], output_ref: "flux-root" },
+    { name: "flux-packs", kind: "custom", status: "implemented", consumes: ["fleet", "packs"], output_ref: "flux-packs" },
+    { name: "flux-source", kind: "custom", status: "implemented", consumes: ["packs"], output_ref: "flux-source" },
     { name: "nix-hosts", kind: "custom", status: "design_only", consumes: ["fleet"], output_ref: "nix-hosts" },
   ];
 }

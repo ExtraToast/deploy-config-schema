@@ -835,7 +835,13 @@
         "gatus",
         "edge-catalog",
         "edge-route-catalog",
-        "image-metadata"
+        "image-metadata",
+        "kubernetes",
+        "flux-root",
+        "flux-packs",
+        "flux-source",
+        "nix-hosts",
+        "vso"
       ]
     }
   }
