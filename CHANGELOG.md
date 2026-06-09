@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.3.0...v0.4.0) (2026-06-09)
+
+
+### Features
+
+* schema validate + render-tree drift CLI; harden tests/coverage ([#14](https://github.com/ExtraToast/deploy-config-schema/issues/14)) ([3481af7](https://github.com/ExtraToast/deploy-config-schema/commit/3481af7917a308d95ca9115c205615fe2b6de22e))
+
+
+### Bug Fixes
+
+* add repository field for GitHub Packages linking ([#15](https://github.com/ExtraToast/deploy-config-schema/issues/15)) ([e580bc9](https://github.com/ExtraToast/deploy-config-schema/commit/e580bc96bd5340bad352719b4bda9396c8119ebb))
+
 ## [0.3.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.2.0...v0.3.0) (2026-06-09)
 
 
