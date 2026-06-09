@@ -837,6 +837,9 @@
         "edge-route-catalog",
         "image-metadata",
         "kubernetes",
+        "flux-root",
+        "flux-packs",
+        "flux-source",
         "nix-hosts",
         "vso"
       ]

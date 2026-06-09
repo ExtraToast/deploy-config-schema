@@ -13,6 +13,9 @@ The Round-2 MVP validates the full deploy config shape and implements the common
 - `kubernetes`: renders canonical `service-intent` workloads into app-local Kubernetes manifests under `platform/cluster/flux/apps/<group>/<service>/`.
 - `nix-hosts`: renders fleet inventory into `platform/flake.nix`, generated NixOS host defaults, and generated k3s label modules.
 - `vso`: renders Vault Secrets Operator references from `vault-dynamic-secrets` into CRs and namespace-local ServiceAccounts without secret values.
+- `flux-root`: renders `clusters/<environment>/kustomization.yaml` plus ordered Flux `Kustomization` CRs in `kustomizations.yaml`. It infers layer sets from packs and service groups, including website-style `core/data/vso-secrets/edge/utility-system/mail/stateless` graphs and personal-stack-style optional `metallb-config`, `observability`, `grafana-dashboards`, and `media` layers. Dependencies are deterministic and can be overridden through `overrides["flux-root"].layers`.
+- `flux-source`: renders Flux `HelmRepository`, OCI-style Helm repository, and `HelmRelease` manifests for known core/data packs and declared chart services. Known platform pack sources/releases are grounded in `platform-blueprints/packs/**`; declared charts can provide `source`, `chart`, `namespace`, `interval`, and `values`.
+- `flux-packs`: composes known `platform-blueprints/packs/**` manifests into consumer-owned `platform/cluster/flux/apps/**` paths. It fills placeholders from platform data and substitutions, leaves source/release ownership to `flux-source`, rewrites the Gatus pack to consume the generated endpoints ConfigMap, and emits group `kustomization.yaml` files for copied pack directories.
 
 ### `kubernetes`
 
@@ -49,4 +52,4 @@ Generated host defaults guard host-specific modules with `builtins.pathExists ./
 
 ## Follow-ups
 
-Per-service special-casing must stay data-driven through route rules and probes. Nomad inputs, Flux pack/root/source adapters, live downstream migrations, and generated-output application remain outside this MVP.
+Per-service special-casing must stay data-driven through route rules and probes. The Flux adapters intentionally generalize domains, namespaces, host selectors, chart versions, and image/source details through platform input and `overrides.*.substitutions`; downstream migrations and generated-output application remain outside this MVP.

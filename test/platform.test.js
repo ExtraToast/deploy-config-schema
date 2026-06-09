@@ -199,5 +199,5 @@ test("CLI platform command usage errors are structured", async () => {
   assert.equal(missingTargetExitCode, 1);
   assert.equal(JSON.parse(missingTargetStderr.text()).diagnostics[0].message, "--target requires a value");
   assert.equal(contractExitCode, 0);
-  assert.ok(JSON.parse(contractStdout.text()).planned.some((adapter) => adapter.name === "flux-root"));
+  assert.ok(JSON.parse(contractStdout.text()).implemented.some((adapter) => adapter.name === "flux-root"));
 });

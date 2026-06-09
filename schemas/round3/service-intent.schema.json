@@ -787,7 +787,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "enum": ["traefik-public", "traefik-lan", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata", "kubernetes", "nix-hosts", "vso"]
+            "enum": ["traefik-public", "traefik-lan", "gatus", "edge-catalog", "edge-route-catalog", "image-metadata", "kubernetes", "flux-root", "flux-packs", "flux-source", "nix-hosts", "vso"]
           }
         },
         "output_paths": {
