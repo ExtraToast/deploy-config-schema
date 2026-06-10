@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.5.0...v0.6.0) (2026-06-10)
+
+
+### Features
+
+* byte-parity for edge/gatus/route-catalog embedded documents (spec 008 T002) ([#22](https://github.com/ExtraToast/deploy-config-schema/issues/22)) ([bc1be1a](https://github.com/ExtraToast/deploy-config-schema/commit/bc1be1ae9af4ea7199a4c3ae59be4a7e5bb1fe98))
+
 ## [0.5.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.4.0...v0.5.0) (2026-06-10)
 
 
