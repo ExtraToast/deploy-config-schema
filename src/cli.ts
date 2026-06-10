@@ -15,6 +15,7 @@ import { createRenderPlan, renderPlanFiles } from "./render-plan/plan.js";
 import { writeGeneratedFiles } from "./render-plan/writer.js";
 import { normalizeServiceIntentForRender } from "./service-intent-normalizer.js";
 import { fleetToDeployConfig } from "./fleet-to-deploy-config.js";
+import { HostEnvError, hostEnvLines } from "./host-env.js";
 
 const allAdapters = new Set(adapterNames());
 const platformTemplatePaths = {
@@ -46,6 +47,12 @@ export async function runCli(args, streams = { stdout: process.stdout, stderr: p
   }
   if (command === "fleet-to-deploy-config") {
     return runFleetToDeployConfig(rest, streams);
+  }
+  if (command === "show-host-env") {
+    return runShowHostEnv(rest, streams, { install: false });
+  }
+  if (command === "show-install-host-env") {
+    return runShowHostEnv(rest, streams, { install: true });
   }
   if (command === "adapter-contract") {
     streams.stdout.write(`${JSON.stringify(adapterContract(), null, 2)}\n`);
@@ -280,6 +287,27 @@ function runFleetToDeployConfig(args, streams) {
   const fleet = loadConfig(positionals[0]);
   streams.stdout.write(`${JSON.stringify(fleetToDeployConfig(fleet), null, 2)}\n`);
   return 0;
+}
+
+function runShowHostEnv(args, streams, options) {
+  const { positionals, diagnostics } = parseOptions(args);
+  const command = options.install ? "show-install-host-env" : "show-host-env";
+  if (diagnostics.length > 0 || positionals.length !== 2) {
+    writeDiagnostics(streams.stderr, diagnostics.length > 0 ? diagnostics : usageDiagnostic(`${command} <fleet.yaml> <node>`));
+    return 1;
+  }
+
+  const fleet = loadConfig(positionals[0]);
+  try {
+    streams.stdout.write(hostEnvLines(fleet, positionals[1], options));
+    return 0;
+  } catch (error) {
+    if (error instanceof HostEnvError) {
+      streams.stderr.write(`${error.message}\n`);
+      return 1;
+    }
+    throw error;
+  }
 }
 
 function validateFiles(paths, kind) {
@@ -600,6 +628,8 @@ function usage() {
     "  deploy-config-schema render-tree <platform.yaml> --output <root> [--target edge|adapter] [--dry-run|--diff|--check|--force] [--blueprints-root <dir>] [--blueprints-version <tag>]",
     "  deploy-config-schema render <adapter> <config> [--input deploy-config|service-intent] [--output <path>]",
     "  deploy-config-schema fleet-to-deploy-config <fleet.yaml>",
+    "  deploy-config-schema show-host-env <fleet.yaml> <node>",
+    "  deploy-config-schema show-install-host-env <fleet.yaml> <node>",
     "  deploy-config-schema adapter-contract",
     "",
     "Artifact kinds:",
