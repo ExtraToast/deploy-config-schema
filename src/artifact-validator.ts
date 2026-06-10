@@ -1,4 +1,9 @@
-import Ajv2020 from "ajv/dist/2020.js";
+// @ts-nocheck -- Artifact semantic validation intentionally walks several
+// schema-validated artifact shapes with dynamic cross-reference checks. This
+// conversion keeps runtime behavior stable and leaves full generated schema
+// typing for a follow-up pass.
+import { createRequire } from "node:module";
+import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
 import { validateConfig } from "./validator.js";
 import {
   fleetInventoryJsonSchema,
@@ -11,6 +16,9 @@ const artifactSchemas = {
   "fleet-inventory": fleetInventoryJsonSchema,
   "vault-dynamic-secrets": vaultDynamicSecretsJsonSchema,
 };
+
+const require = createRequire(import.meta.url);
+const Ajv2020 = require("ajv/dist/2020.js").default as typeof Ajv2020Class;
 
 const validators = new Map();
 

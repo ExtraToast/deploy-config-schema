@@ -568,7 +568,7 @@ function normalizeBlueprintFiles(files: unknown): BlueprintFile[] | undefined {
     : Object.entries((isRecord(files) && isRecord(files.files) ? files.files : files) as Record<string, unknown>)
       .map(([relativePath, content]) => ({ relativePath, content }));
   return (entries as BlueprintFileInput[]).map((file) => ({
-    relativePath: safeRelativePath(file.relativePath ?? file.path),
+    relativePath: safeRelativePath((file.relativePath ?? file.path) as string),
     content: String(file.content),
   })).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }

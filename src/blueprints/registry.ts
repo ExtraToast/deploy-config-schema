@@ -5,7 +5,30 @@ import { safeRelativePath } from "../render-plan/paths.js";
 
 export const BLUEPRINTS_ROOT_ENV = "DEPLOY_CONFIG_BLUEPRINTS_ROOT";
 
-export function resolveBlueprintRegistry(options = {}, env = process.env) {
+export type Diagnostic = {
+  code: string;
+  path: string;
+  message: string;
+};
+
+export type BlueprintRegistry = {
+  root: string;
+  packs: Record<string, Record<string, string>>;
+  files(blueprintPath: string): Record<string, string> | undefined;
+};
+
+export type BlueprintRegistryResult =
+  | { ok: true; root: string; registry: BlueprintRegistry }
+  | { ok: false; diagnostics: Diagnostic[] };
+
+export type ResolvedBlueprintRegistry =
+  | { ok: true; registry?: BlueprintRegistry; provenance?: { source: string; version?: string } }
+  | { ok: false; diagnostics: Diagnostic[] };
+
+export function resolveBlueprintRegistry(
+  options: { root?: string; version?: string } = {},
+  env: NodeJS.ProcessEnv = process.env,
+): ResolvedBlueprintRegistry {
   const root = options.root ?? env[BLUEPRINTS_ROOT_ENV];
   const version = options.version;
 
@@ -33,7 +56,7 @@ export function resolveBlueprintRegistry(options = {}, env = process.env) {
   };
 }
 
-export function loadBlueprintRegistry(root) {
+export function loadBlueprintRegistry(root: string | URL): BlueprintRegistryResult {
   const absoluteRoot = toAbsolutePath(root);
   const packsRoot = posix.join(absoluteRoot, "packs");
 
@@ -46,7 +69,7 @@ export function loadBlueprintRegistry(root) {
     return unavailable(root, "packs/ exists but contains no readable pack files");
   }
 
-  const packs = {};
+  const packs: Record<string, Record<string, string>> = {};
   for (const relativeFile of files) {
     const segments = relativeFile.split("/");
     const content = readFileSync(posix.join(packsRoot, relativeFile), "utf8").trimEnd();
@@ -64,14 +87,14 @@ export function loadBlueprintRegistry(root) {
     registry: {
       root: absoluteRoot,
       packs,
-      files(blueprintPath) {
+      files(blueprintPath: string) {
         return packs[safeRelativePath(blueprintPath)];
       },
     },
   };
 }
 
-function unavailable(root, reason) {
+function unavailable(root: string | URL, reason: string): BlueprintRegistryResult {
   return {
     ok: false,
     diagnostics: [{
@@ -82,12 +105,12 @@ function unavailable(root, reason) {
   };
 }
 
-function toAbsolutePath(path) {
+function toAbsolutePath(path: string | URL): string {
   if (path instanceof URL) return fileURLToPath(path);
   return resolve(String(path)).replaceAll("\\", "/");
 }
 
-function walk(root, prefix = "") {
+function walk(root: string, prefix = ""): string[] {
   return readdirSync(posix.join(root, prefix), { withFileTypes: true }).flatMap((entry) => {
     const relativePath = posix.join(prefix, entry.name);
     if (entry.isDirectory()) return walk(root, relativePath);
