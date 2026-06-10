@@ -1,0 +1,26 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: "${OBSERVABILITY_PROMETHEUS_HELM_REPOSITORY_NAME}"
+  namespace: "${OBSERVABILITY_NAMESPACE}"
+spec:
+  interval: "${OBSERVABILITY_HELM_REPOSITORY_INTERVAL}"
+  url: "${OBSERVABILITY_PROMETHEUS_HELM_REPOSITORY_URL}"
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: "${OBSERVABILITY_GRAFANA_HELM_REPOSITORY_NAME}"
+  namespace: "${OBSERVABILITY_NAMESPACE}"
+spec:
+  interval: "${OBSERVABILITY_HELM_REPOSITORY_INTERVAL}"
+  url: "${OBSERVABILITY_GRAFANA_HELM_REPOSITORY_URL}"
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: "${OBSERVABILITY_OPEN_TELEMETRY_HELM_REPOSITORY_NAME}"
+  namespace: "${OBSERVABILITY_NAMESPACE}"
+spec:
+  interval: "${OBSERVABILITY_HELM_REPOSITORY_INTERVAL}"
+  url: "${OBSERVABILITY_OPEN_TELEMETRY_HELM_REPOSITORY_URL}"

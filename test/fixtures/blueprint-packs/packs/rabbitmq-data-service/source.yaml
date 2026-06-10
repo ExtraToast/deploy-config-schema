@@ -1,0 +1,8 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: "${RABBITMQ_HELM_REPOSITORY_NAME}"
+  namespace: "${RABBITMQ_NAMESPACE}"
+spec:
+  interval: "${RABBITMQ_HELM_REPOSITORY_INTERVAL}"
+  url: "${RABBITMQ_HELM_REPOSITORY_URL}"

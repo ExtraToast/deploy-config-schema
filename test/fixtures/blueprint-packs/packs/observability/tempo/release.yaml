@@ -1,0 +1,26 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: "${OBSERVABILITY_TEMPO_RELEASE_NAME}"
+  namespace: "${OBSERVABILITY_NAMESPACE}"
+spec:
+  interval: "${OBSERVABILITY_RELEASE_INTERVAL}"
+  chart:
+    spec:
+      chart: "${OBSERVABILITY_TEMPO_CHART_NAME}"
+      version: "${OBSERVABILITY_TEMPO_CHART_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: "${OBSERVABILITY_GRAFANA_HELM_REPOSITORY_NAME}"
+        namespace: "${OBSERVABILITY_NAMESPACE}"
+  values:
+    tempo:
+      retention: "${OBSERVABILITY_TEMPO_RETENTION}"
+      metricsGenerator:
+        enabled: ${OBSERVABILITY_TEMPO_METRICS_GENERATOR_ENABLED}
+    persistence:
+      enabled: true
+      storageClassName: "${OBSERVABILITY_TEMPO_STORAGE_CLASS}"
+      size: "${OBSERVABILITY_TEMPO_STORAGE_SIZE}"
+    nodeSelector:
+      "${OBSERVABILITY_TRACES_NODE_SELECTOR_KEY}": "${OBSERVABILITY_TRACES_NODE_SELECTOR_VALUE}"

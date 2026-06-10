@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: "${RABBITMQ_SERVICEMONITOR_NAME}"
+  namespace: "${RABBITMQ_NAMESPACE}"
+  labels:
+    release: "${RABBITMQ_SERVICEMONITOR_RELEASE_LABEL}"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: "${RABBITMQ_RELEASE_NAME}"
+      app.kubernetes.io/name: "${RABBITMQ_APP_LABEL}"
+  namespaceSelector:
+    matchNames:
+      - "${RABBITMQ_NAMESPACE}"
+  endpoints:
+    - port: metrics
+      interval: "${RABBITMQ_METRICS_INTERVAL}"
+      scrapeTimeout: "${RABBITMQ_METRICS_SCRAPE_TIMEOUT}"

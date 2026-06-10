@@ -1,0 +1,80 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: "${RABBITMQ_RELEASE_NAME}"
+  namespace: "${RABBITMQ_NAMESPACE}"
+spec:
+  interval: "${RABBITMQ_RELEASE_INTERVAL}"
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: -1
+  chart:
+    spec:
+      chart: "${RABBITMQ_CHART_NAME}"
+      version: "${RABBITMQ_CHART_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: "${RABBITMQ_HELM_REPOSITORY_NAME}"
+        namespace: "${RABBITMQ_NAMESPACE}"
+  values:
+    replicaCount: ${RABBITMQ_REPLICA_COUNT}
+    auth:
+      username: "${RABBITMQ_INTERNAL_USERNAME}"
+      existingPasswordSecret: "${RABBITMQ_INTERNAL_CREDENTIALS_SECRET_NAME}"
+      existingSecretPasswordKey: "${RABBITMQ_INTERNAL_PASSWORD_KEY}"
+      erlangCookie: "${RABBITMQ_ERLANG_COOKIE_PLACEHOLDER}"
+    extraPlugins: "${RABBITMQ_EXTRA_PLUGINS}"
+    loadDefinition:
+      enabled: false
+    extraConfiguration: |
+      auth_backends.1 = rabbit_auth_backend_oauth2
+      auth_backends.2 = internal
+
+      auth_oauth2.resource_server_id = ${RABBITMQ_OAUTH2_RESOURCE_SERVER_ID}
+      auth_oauth2.issuer = ${RABBITMQ_OAUTH2_ISSUER_URL}
+      auth_oauth2.scope_prefix = ${RABBITMQ_OAUTH2_SCOPE_PREFIX}
+      auth_oauth2.additional_scopes_key = ${RABBITMQ_OAUTH2_ADDITIONAL_SCOPES_KEY}
+      auth_oauth2.preferred_username_claims.1 = ${RABBITMQ_OAUTH2_USERNAME_CLAIM_1}
+      auth_oauth2.preferred_username_claims.2 = ${RABBITMQ_OAUTH2_USERNAME_CLAIM_2}
+      auth_oauth2.scope_aliases.${RABBITMQ_OAUTH2_ADMIN_ALIAS_NAME} = ${RABBITMQ_OAUTH2_ADMIN_ALIAS_SCOPES}
+      auth_oauth2.scope_aliases.${RABBITMQ_OAUTH2_SERVICE_ALIAS_NAME} = ${RABBITMQ_OAUTH2_SERVICE_ALIAS_SCOPES}
+
+      management.oauth_enabled = true
+      management.oauth_disable_basic_auth = ${RABBITMQ_MANAGEMENT_OAUTH_DISABLE_BASIC_AUTH}
+      management.oauth_client_id = ${RABBITMQ_MANAGEMENT_OAUTH_CLIENT_ID}
+      management.oauth_scopes = ${RABBITMQ_MANAGEMENT_OAUTH_SCOPES}
+    persistence:
+      enabled: true
+      storageClass: "${RABBITMQ_STORAGE_CLASS}"
+      size: "${RABBITMQ_STORAGE_SIZE}"
+    resources:
+      requests:
+        cpu: "${RABBITMQ_REQUEST_CPU}"
+        memory: "${RABBITMQ_REQUEST_MEMORY}"
+      limits:
+        memory: "${RABBITMQ_LIMIT_MEMORY}"
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: false
+    podLabels:
+      app.kubernetes.io/part-of: "${RABBITMQ_PART_OF_LABEL}"
+    nodeSelector:
+      "${RABBITMQ_NODE_SELECTOR_KEY}": "${RABBITMQ_NODE_SELECTOR_VALUE}"
+    tolerations:
+      - key: "${RABBITMQ_TOLERATION_KEY}"
+        operator: "${RABBITMQ_TOLERATION_OPERATOR}"
+        value: "${RABBITMQ_TOLERATION_VALUE}"
+        effect: "${RABBITMQ_TOLERATION_EFFECT}"
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: ${RABBITMQ_ANTI_AFFINITY_WEIGHT}
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: "${RABBITMQ_RELEASE_NAME}"
+              topologyKey: "${RABBITMQ_ANTI_AFFINITY_TOPOLOGY_KEY}"

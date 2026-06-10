@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: "${EDGE_CLOUDFLARE_CLUSTER_ISSUER_NAME}"
+spec:
+  acme:
+    email: "${EDGE_ACME_EMAIL}"
+    server: "${EDGE_ACME_SERVER}"
+    privateKeySecretRef:
+      name: "${EDGE_ACME_PRIVATE_KEY_SECRET_NAME}"
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: "${EDGE_CLOUDFLARE_TOKEN_SECRET_NAME}"
+              key: "${EDGE_CLOUDFLARE_TOKEN_SECRET_KEY}"

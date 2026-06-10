@@ -1,0 +1,81 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: "${TRAEFIK_PUBLIC_RELEASE_NAME}"
+  namespace: "${TRAEFIK_PUBLIC_NAMESPACE}"
+spec:
+  interval: "${TRAEFIK_PUBLIC_RELEASE_INTERVAL}"
+  chart:
+    spec:
+      chart: "${TRAEFIK_PUBLIC_CHART_NAME}"
+      version: "${TRAEFIK_PUBLIC_CHART_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: "${TRAEFIK_PUBLIC_HELM_REPOSITORY_NAME}"
+        namespace: "${TRAEFIK_PUBLIC_NAMESPACE}"
+  values:
+    deployment:
+      kind: Deployment
+      replicas: 1
+    updateStrategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 0
+        maxUnavailable: 1
+    ingressClass:
+      enabled: true
+      isDefaultClass: true
+      name: "${TRAEFIK_PUBLIC_INGRESS_CLASS}"
+    ingressRoute:
+      dashboard:
+        enabled: false
+    providers:
+      kubernetesCRD:
+        allowCrossNamespace: true
+        enabled: true
+        ingressClass: "${TRAEFIK_PUBLIC_INGRESS_CLASS}"
+      kubernetesIngress:
+        enabled: true
+        ingressClass: "${TRAEFIK_PUBLIC_INGRESS_CLASS}"
+        publishedService:
+          enabled: true
+    service:
+      type: "${TRAEFIK_PUBLIC_SERVICE_TYPE}"
+      annotations:
+        external-dns.alpha.kubernetes.io/cloudflare-proxied: "${TRAEFIK_PUBLIC_CLOUDFLARE_PROXIED}"
+        external-dns.alpha.kubernetes.io/hostname: "${TRAEFIK_PUBLIC_EXTERNAL_DNS_HOSTNAME}"
+      spec:
+        externalTrafficPolicy: "${TRAEFIK_PUBLIC_EXTERNAL_TRAFFIC_POLICY}"
+    ports:
+      web:
+        hostPort: ${TRAEFIK_PUBLIC_WEB_HOST_PORT}
+      websecure:
+        hostPort: ${TRAEFIK_PUBLIC_WEBSECURE_HOST_PORT}
+      metrics:
+        port: ${TRAEFIK_PUBLIC_METRICS_PORT}
+        expose:
+          default: false
+        exposedPort: ${TRAEFIK_PUBLIC_METRICS_PORT}
+        protocol: TCP
+    logs:
+      general:
+        format: json
+      access:
+        enabled: true
+        format: json
+    metrics:
+      prometheus:
+        enabled: true
+        entryPoint: metrics
+        addEntryPointsLabels: true
+        addRoutersLabels: true
+        addServicesLabels: true
+    tracing:
+      otlp:
+        enabled: "${TRAEFIK_PUBLIC_OTLP_ENABLED}"
+        http:
+          enabled: "${TRAEFIK_PUBLIC_OTLP_ENABLED}"
+          endpoint: "${TRAEFIK_PUBLIC_OTLP_ENDPOINT}"
+      sampleRate: ${TRAEFIK_PUBLIC_TRACE_SAMPLE_RATE}
+    nodeSelector:
+      "${TRAEFIK_PUBLIC_NODE_SELECTOR_KEY}": "${TRAEFIK_PUBLIC_NODE_SELECTOR_VALUE}"

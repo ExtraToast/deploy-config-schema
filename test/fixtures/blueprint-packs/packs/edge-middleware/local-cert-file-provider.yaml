@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "${EDGE_LOCAL_CERT_CONFIGMAP_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+data:
+  dynamic.yaml: |
+    tls:
+      certificates:
+        - certFile: "${EDGE_LOCAL_CERT_FILE_PATH}"
+          keyFile: "${EDGE_LOCAL_KEY_FILE_PATH}"
+      stores:
+        default:
+          defaultCertificate:
+            certFile: "${EDGE_LOCAL_DEFAULT_CERT_FILE_PATH}"
+            keyFile: "${EDGE_LOCAL_DEFAULT_KEY_FILE_PATH}"

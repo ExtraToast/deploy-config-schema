@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "${GATUS_CONFIG_CONFIGMAP_NAME}"
+  namespace: "${GATUS_NAMESPACE}"
+data:
+  config.yaml: |
+    storage:
+      type: sqlite
+      path: /data/gatus.db
+    ui:
+      title: "${GATUS_UI_TITLE}"
+      description: "${GATUS_UI_DESCRIPTION}"
+      header: "${GATUS_UI_HEADER}"
+    endpoints: []

@@ -1,0 +1,13 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: "${EDGE_FORWARD_AUTH_MIDDLEWARE_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+spec:
+  forwardAuth:
+    address: "${EDGE_FORWARD_AUTH_ADDRESS}"
+    trustForwardHeader: ${EDGE_FORWARD_AUTH_TRUST_FORWARD_HEADER}
+    authResponseHeaders:
+      - "${EDGE_FORWARD_AUTH_RESPONSE_HEADER_USER}"
+      - "${EDGE_FORWARD_AUTH_RESPONSE_HEADER_EMAIL}"
+      - "${EDGE_FORWARD_AUTH_RESPONSE_HEADER_GROUPS}"

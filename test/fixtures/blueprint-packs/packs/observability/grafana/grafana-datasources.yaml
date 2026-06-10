@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "${OBSERVABILITY_GRAFANA_DATASOURCES_CONFIGMAP_NAME}"
+  namespace: "${OBSERVABILITY_NAMESPACE}"
+  labels:
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: "${OBSERVABILITY_PROMETHEUS_URL}"
+        isDefault: true
+        jsonData:
+          exemplarTraceIdDestinations:
+            - name: trace_id
+              datasourceUid: tempo
+      - name: Loki
+        type: loki
+        access: proxy
+        url: "${OBSERVABILITY_LOKI_URL}"
+        jsonData:
+          derivedFields:
+            - name: TraceID
+              matcherRegex: "trace[_-]?id=(\\w+)"
+              datasourceUid: tempo
+              url: "$${__value.raw}"
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: "${OBSERVABILITY_TEMPO_URL}"
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: Loki
+          tracesToMetrics:
+            datasourceUid: Prometheus
+      - name: Pyroscope
+        type: grafana-pyroscope-datasource
+        access: proxy
+        url: "${OBSERVABILITY_PYROSCOPE_URL}"

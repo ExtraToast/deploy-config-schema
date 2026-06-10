@@ -1,0 +1,18 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: "${EDGE_SECURITY_HEADERS_MIDDLEWARE_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+spec:
+  headers:
+    browserXssFilter: ${EDGE_SECURITY_BROWSER_XSS_FILTER}
+    contentTypeNosniff: ${EDGE_SECURITY_CONTENT_TYPE_NOSNIFF}
+    frameDeny: ${EDGE_SECURITY_FRAME_DENY}
+    referrerPolicy: "${EDGE_SECURITY_REFERRER_POLICY}"
+    permissionsPolicy: "${EDGE_SECURITY_PERMISSIONS_POLICY}"
+    stsSeconds: ${EDGE_SECURITY_STS_SECONDS}
+    stsIncludeSubdomains: ${EDGE_SECURITY_STS_INCLUDE_SUBDOMAINS}
+    stsPreload: ${EDGE_SECURITY_STS_PRELOAD}
+    customResponseHeaders:
+      X-Frame-Options: "${EDGE_SECURITY_X_FRAME_OPTIONS}"
+      X-Content-Type-Options: "${EDGE_SECURITY_X_CONTENT_TYPE_OPTIONS}"

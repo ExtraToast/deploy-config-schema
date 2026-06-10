@@ -1,0 +1,39 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: "${OBSERVABILITY_GRAFANA_RELEASE_NAME}"
+  namespace: "${OBSERVABILITY_NAMESPACE}"
+spec:
+  interval: "${OBSERVABILITY_RELEASE_INTERVAL}"
+  chart:
+    spec:
+      chart: "${OBSERVABILITY_GRAFANA_CHART_NAME}"
+      version: "${OBSERVABILITY_GRAFANA_CHART_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: "${OBSERVABILITY_GRAFANA_HELM_REPOSITORY_NAME}"
+        namespace: "${OBSERVABILITY_NAMESPACE}"
+  values:
+    persistence:
+      enabled: true
+      storageClassName: "${OBSERVABILITY_GRAFANA_STORAGE_CLASS}"
+      size: "${OBSERVABILITY_GRAFANA_STORAGE_SIZE}"
+    grafana.ini:
+      server:
+        root_url: "${OBSERVABILITY_GRAFANA_ROOT_URL}"
+      auth.generic_oauth:
+        enabled: "${OBSERVABILITY_GRAFANA_OIDC_ENABLED}"
+        name: "${OBSERVABILITY_GRAFANA_OIDC_NAME}"
+        auth_url: "${OBSERVABILITY_GRAFANA_OIDC_AUTH_URL}"
+        token_url: "${OBSERVABILITY_GRAFANA_OIDC_TOKEN_URL}"
+        api_url: "${OBSERVABILITY_GRAFANA_OIDC_API_URL}"
+        client_id: "${OBSERVABILITY_GRAFANA_OIDC_CLIENT_ID}"
+        scopes: "${OBSERVABILITY_GRAFANA_OIDC_SCOPES}"
+        role_attribute_path: "${OBSERVABILITY_GRAFANA_OIDC_ROLE_ATTRIBUTE_PATH}"
+    envValueFrom:
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:
+        secretKeyRef:
+          name: "${OBSERVABILITY_GRAFANA_OIDC_SECRET_NAME}"
+          key: "${OBSERVABILITY_GRAFANA_OIDC_SECRET_KEY}"
+    nodeSelector:
+      "${OBSERVABILITY_GRAFANA_NODE_SELECTOR_KEY}": "${OBSERVABILITY_GRAFANA_NODE_SELECTOR_VALUE}"

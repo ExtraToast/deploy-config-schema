@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - helm-repositories.yaml
+  - metrics-stack/release.yaml
+  - grafana/release.yaml
+  - grafana/grafana-datasources.yaml
+  - grafana-operator/release.yaml
+  - loki/release.yaml
+  - tempo/release.yaml
+  - alloy/release.yaml
+  - gatus/kustomization.yaml
+  - alerts/platform-alerts.yaml

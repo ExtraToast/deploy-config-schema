@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: "${OBSERVABILITY_PLATFORM_ALERTS_NAME}"
+  namespace: "${OBSERVABILITY_NAMESPACE}"
+spec:
+  groups:
+    - name: platform.rules
+      rules:
+        - alert: FluxKustomizationNotReady
+          expr: gotk_resource_info{ready!="True", customresource_kind="Kustomization"} == 1
+          for: "${OBSERVABILITY_FLUX_ALERT_FOR}"
+          labels:
+            severity: warning
+          annotations:
+            summary: "Flux Kustomization is not ready"
+        - alert: KubernetesPodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[15m]) > ${OBSERVABILITY_POD_RESTART_RATE_THRESHOLD}
+          for: "${OBSERVABILITY_POD_RESTART_ALERT_FOR}"
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod restart rate exceeded threshold"

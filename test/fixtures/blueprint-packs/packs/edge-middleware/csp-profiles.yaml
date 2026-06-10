@@ -1,0 +1,26 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: "${EDGE_CSP_STRICT_MIDDLEWARE_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+spec:
+  headers:
+    contentSecurityPolicy: "${EDGE_CSP_STRICT_POLICY}"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: "${EDGE_CSP_ADMIN_MIDDLEWARE_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+spec:
+  headers:
+    contentSecurityPolicy: "${EDGE_CSP_ADMIN_POLICY}"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: "${EDGE_CSP_WORKFLOW_MIDDLEWARE_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+spec:
+  headers:
+    contentSecurityPolicy: "${EDGE_CSP_WORKFLOW_POLICY}"

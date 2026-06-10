@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "${GATUS_PVC_NAME}"
+  namespace: "${GATUS_NAMESPACE}"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "${GATUS_STORAGE_CLASS}"
+  resources:
+    requests:
+      storage: "${GATUS_STORAGE_SIZE}"

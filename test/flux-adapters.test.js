@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import YAML from "yaml";
 import { renderFluxPacks } from "../src/adapters/flux-packs.js";
@@ -165,7 +166,11 @@ function readJson(relativePath) {
 function realBlueprintRegistry() {
   const entries = {};
   for (const definition of Object.values(FLUX_PACKS)) {
-    const absolutePath = `/workspace/platform-blueprints/${definition.sourcePath}`;
+    // Pack source is vendored under test/fixtures/blueprint-packs so the test is
+    // self-contained in CI (no sibling platform-blueprints checkout on disk).
+    const absolutePath = fileURLToPath(
+      new URL(`fixtures/blueprint-packs/${definition.sourcePath}`, import.meta.url),
+    );
     entries[definition.sourcePath] = {};
     for (const file of walk(absolutePath)) {
       if (file.endsWith(".md")) continue;

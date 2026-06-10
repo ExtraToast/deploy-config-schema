@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "${GATUS_ENDPOINTS_CONFIGMAP_NAME}"
+  namespace: "${GATUS_NAMESPACE}"
+data:
+  endpoints.yaml: |
+    endpoints: []

@@ -1,0 +1,42 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: "${TRAEFIK_LAN_RELEASE_NAME}"
+  namespace: "${TRAEFIK_LAN_NAMESPACE}"
+spec:
+  interval: "${TRAEFIK_LAN_RELEASE_INTERVAL}"
+  chart:
+    spec:
+      chart: "${TRAEFIK_LAN_CHART_NAME}"
+      version: "${TRAEFIK_LAN_CHART_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: "${TRAEFIK_LAN_HELM_REPOSITORY_NAME}"
+        namespace: "${TRAEFIK_LAN_NAMESPACE}"
+  values:
+    deployment:
+      kind: Deployment
+      replicas: 1
+    ingressClass:
+      enabled: true
+      isDefaultClass: false
+      name: "${TRAEFIK_LAN_INGRESS_CLASS}"
+    providers:
+      kubernetesCRD:
+        allowCrossNamespace: true
+        enabled: true
+        ingressClass: "${TRAEFIK_LAN_INGRESS_CLASS}"
+      kubernetesIngress:
+        enabled: true
+        ingressClass: "${TRAEFIK_LAN_INGRESS_CLASS}"
+    service:
+      type: LoadBalancer
+      annotations:
+        metallb.io/address-pool: "${TRAEFIK_LAN_METALLB_ADDRESS_POOL}"
+    ports:
+      web:
+        exposedPort: ${TRAEFIK_LAN_WEB_PORT}
+      websecure:
+        exposedPort: ${TRAEFIK_LAN_WEBSECURE_PORT}
+    nodeSelector:
+      "${TRAEFIK_LAN_NODE_SELECTOR_KEY}": "${TRAEFIK_LAN_NODE_SELECTOR_VALUE}"

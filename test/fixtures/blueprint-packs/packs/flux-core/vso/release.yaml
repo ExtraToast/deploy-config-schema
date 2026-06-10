@@ -1,0 +1,37 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: "${VSO_RELEASE_NAME}"
+  namespace: "${VSO_NAMESPACE}"
+spec:
+  interval: "${VSO_RELEASE_INTERVAL}"
+  install:
+    disableWait: true
+    remediation:
+      retries: -1
+  upgrade:
+    disableWait: true
+    remediation:
+      retries: -1
+  chart:
+    spec:
+      chart: "${VSO_CHART_NAME}"
+      version: "${VSO_CHART_VERSION}"
+      sourceRef:
+        kind: HelmRepository
+        name: "${VSO_HELM_REPOSITORY_NAME}"
+        namespace: "${VSO_NAMESPACE}"
+  values:
+    defaultVaultConnection:
+      enabled: true
+      address: "${VSO_DEFAULT_VAULT_ADDRESS}"
+    defaultAuthMethod:
+      enabled: true
+      namespace: "${VSO_NAMESPACE}"
+      method: kubernetes
+      mount: "${VSO_KUBERNETES_AUTH_MOUNT}"
+      kubernetes:
+        role: "${VSO_KUBERNETES_AUTH_ROLE}"
+        serviceAccount: "${VSO_SERVICE_ACCOUNT_NAME}"
+        tokenAudiences:
+          - "${VSO_TOKEN_AUDIENCE}"

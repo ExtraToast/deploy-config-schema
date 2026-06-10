@@ -1,0 +1,30 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: "${EDGE_DASHBOARD_CHAIN_MIDDLEWARE_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+spec:
+  chain:
+    middlewares:
+      - name: "${EDGE_FORWARD_AUTH_MIDDLEWARE_NAME}"
+      - name: "${EDGE_SECURITY_HEADERS_MIDDLEWARE_NAME}"
+      - name: "${EDGE_CSP_ADMIN_MIDDLEWARE_NAME}"
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: "${EDGE_DASHBOARD_INGRESSROUTE_NAME}"
+  namespace: "${EDGE_MIDDLEWARE_NAMESPACE}"
+spec:
+  entryPoints:
+    - "${EDGE_DASHBOARD_ENTRYPOINT}"
+  routes:
+    - match: "Host(`${EDGE_DASHBOARD_HOSTNAME}`)"
+      kind: Rule
+      middlewares:
+        - name: "${EDGE_DASHBOARD_CHAIN_MIDDLEWARE_NAME}"
+      services:
+        - name: api@internal
+          kind: TraefikService
+  tls:
+    secretName: "${EDGE_DASHBOARD_TLS_SECRET_NAME}"
