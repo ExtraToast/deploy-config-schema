@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +16,7 @@ import { generatedHeader, renderManagedContent, writeGeneratedFiles } from "../s
 
 const singleNode = readYaml("../fixtures/platform/single-node.platform.yaml");
 const multiSite = readYaml("../fixtures/platform/multi-site.platform.yaml");
+const fullTree = readYaml("../fixtures/platform/full-tree.platform.yaml");
 
 function readYaml(relativePath) {
   return YAML.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
@@ -161,6 +162,61 @@ test("CLI platform commands validate, expand, plan, and render tree", async () =
   assert.ok(readFileSync(join(renderRoot, "platform/cluster/flux/apps/edge/traefik-ingressroutes.yaml"), "utf8").startsWith(generatedHeader));
 });
 
+test("CLI render-tree --target all renders full deterministic consumer tree", async () => {
+  const root = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));
+  const fixturePath = "fixtures/platform/full-tree.platform.yaml";
+  const planStdout = stream();
+  const renderStdout = stream();
+  const checkStdout = stream();
+  const driftStdout = stream();
+  const stderr = stream();
+
+  assert.deepEqual(validatePlatform(fullTree).diagnostics, []);
+  assert.equal(await runCli(["render-plan", fixturePath, "--target", "all", "--output", root], { stdout: planStdout, stderr }), 0);
+  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all"], { stdout: renderStdout, stderr }), 0);
+
+  const plan = YAML.parse(planStdout.text());
+  const response = JSON.parse(renderStdout.text());
+  const paths = response.plan.targets.map((target) => target.path);
+  const renderedSnapshot = snapshotTree(root);
+
+  assert.deepEqual(paths, [...paths].sort());
+  assert.deepEqual(response.plan.targets.map((target) => target.path), plan.targets.map((target) => target.path));
+  assert.ok(paths.includes("platform/flake.nix"));
+  assert.ok(paths.includes("platform/nix/hosts/alpha-control-1/default.nix"));
+  assert.ok(paths.includes("platform/nix/hosts/beta-worker-1/README.md"));
+  assert.ok(paths.includes("platform/cluster/flux/apps/core/controller/deployment.yaml"));
+  assert.ok(paths.includes("platform/cluster/flux/apps/data/postgres/deployment.yaml"));
+  assert.ok(paths.includes("platform/cluster/flux/apps/edge/traefik-ingressroutes.yaml"));
+  assert.ok(paths.includes("platform/cluster/flux/apps/stateless/frontend/deployment.yaml"));
+  assert.equal(response.results.length, response.plan.targets.length);
+  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all", "--check"], { stdout: checkStdout, stderr }), 0);
+  assert.deepEqual(snapshotTree(root), renderedSnapshot);
+  assert.equal(JSON.parse(checkStdout.text()).ok, true);
+
+  writeFileSync(join(root, "platform/nix/generated/beta-worker-1-labels.nix"), `${generatedHeader}\nchanged = true;\n`);
+  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all", "--check"], { stdout: driftStdout, stderr }), 1);
+  assert.equal(JSON.parse(driftStdout.text()).diagnostics[0].code, "E_RENDER_DIFF");
+});
+
+test("CLI render-tree preserves consumer-owned nix override modules", async () => {
+  const root = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));
+  const hostRoot = join(root, "platform/nix/hosts/alpha-control-1");
+  const stdout = stream();
+  const stderr = stream();
+  mkdirSync(hostRoot, { recursive: true });
+  writeFileSync(join(hostRoot, "network.nix"), "{ networking.useDHCP = false; }\n");
+  writeFileSync(join(hostRoot, "disko.nix"), "{ disk.main.device = \"/dev/sda\"; }\n");
+  writeFileSync(join(hostRoot, "secrets.nix"), "{ age.secrets = {}; }\n");
+
+  assert.equal(await runCli(["render-tree", "fixtures/platform/full-tree.platform.yaml", "--output", root, "--target", "nix-hosts"], { stdout, stderr }), 0);
+
+  assert.equal(readFileSync(join(hostRoot, "network.nix"), "utf8"), "{ networking.useDHCP = false; }\n");
+  assert.equal(readFileSync(join(hostRoot, "disko.nix"), "utf8"), "{ disk.main.device = \"/dev/sda\"; }\n");
+  assert.equal(readFileSync(join(hostRoot, "secrets.nix"), "utf8"), "{ age.secrets = {}; }\n");
+  assert.match(readFileSync(join(hostRoot, "default.nix"), "utf8"), /builtins.pathExists \.\/network\.nix/);
+});
+
 test("CLI render-tree --check reports deterministic generated tree drift", async () => {
   const root = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));
   const writeStdout = stream();
@@ -204,6 +260,24 @@ test("CLI render-tree --check reports deterministic generated tree drift", async
   assert.equal(JSON.parse(cleanStdout.text()).ok, true);
   assert.equal(JSON.parse(driftStdout.text()).diagnostics[0].code, "E_RENDER_DIFF");
 });
+
+function snapshotTree(root) {
+  return Object.fromEntries(walkFiles(root).map((path) => [
+    path,
+    readFileSync(join(root, path), "utf8"),
+  ]));
+}
+
+function walkFiles(root, prefix = "") {
+  const dir = join(root, prefix);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).sort().flatMap((entry) => {
+    const relative = prefix ? `${prefix}/${entry}` : entry;
+    const absolute = join(root, relative);
+    if (statSync(absolute).isDirectory()) return walkFiles(root, relative);
+    return [relative];
+  });
+}
 
 test("CLI render-tree refuses unmanaged files unless forced", async () => {
   const root = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));

@@ -16,7 +16,7 @@ export function createRenderPlan(expansion, options = {}) {
     .filter(Boolean)
     .filter((adapter) => target === "all" || adapter.target === target || adapter.name === target)
     .flatMap((adapter) => targetEntries(adapter, allocator, renderContext))
-    .sort((left, right) => left.path.localeCompare(right.path) || left.adapter.localeCompare(right.adapter) || left.name.localeCompare(right.name));
+    .sort((left, right) => compareStrings(left.path, right.path) || compareStrings(left.adapter, right.adapter) || compareStrings(left.name, right.name));
 
   return {
     version: 1,
@@ -42,7 +42,7 @@ export function renderPlanFiles(expansion, plan) {
     const adapter = getAdapter(target.adapter);
     return renderAdapterFiles(adapter, context).filter((file) => file.path === target.path);
   });
-  return files.sort((left, right) => left.path.localeCompare(right.path) || left.adapter.localeCompare(right.adapter));
+  return files.sort((left, right) => compareStrings(left.path, right.path) || compareStrings(left.adapter, right.adapter));
 }
 
 function targetEntries(adapter, allocator, context) {
@@ -102,4 +102,10 @@ function createAdapterContext(expansion, renderPlan, pathAllocator, options) {
 
 function gatusGroup(platform) {
   return platform.packs?.observability?.gatus !== undefined ? "observability" : "utility-system";
+}
+
+function compareStrings(left, right) {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }

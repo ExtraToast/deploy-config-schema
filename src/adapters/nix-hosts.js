@@ -1,6 +1,6 @@
 const ADAPTER = "nix-hosts";
 
-const roleModules = {
+const fallbackRoleModules = {
   base: "base",
   "control-plane": "roleControlPlane",
   worker: "roleWorker",
@@ -51,13 +51,23 @@ export function renderNixHosts(context) {
     },
     ...nodes.flatMap((node) => [
       {
+        path: `platform/nix/hosts/${node.id}/README.md`,
+        content: renderHostReadme(node),
+        adapter: ADAPTER,
+      },
+      {
         path: `platform/nix/hosts/${node.id}/default.nix`,
-        content: renderHostDefault(cluster, node),
+        content: renderHostDefault(context, cluster, node),
         adapter: ADAPTER,
       },
       {
         path: `platform/nix/generated/${node.id}-labels.nix`,
         content: renderLabelsModule(cluster, node),
+        adapter: ADAPTER,
+      },
+      {
+        path: `platform/nix/generated/${node.id}-deploy-metadata.nix`,
+        content: renderDeployMetadata(node),
         adapter: ADAPTER,
       },
     ]),
@@ -136,9 +146,10 @@ function renderDeployNode(node) {
         };`;
 }
 
-function renderHostDefault(cluster, node) {
-  const imports = modulesFor(node).map((module) => `      inputs.platform-blueprints.nixosModules.${module}`);
+function renderHostDefault(context, cluster, node) {
+  const imports = modulesFor(context, node).map((module) => `      inputs.platform-blueprints.nixosModules.${module}`);
   imports.push(`      ../../generated/${node.id}-labels.nix`);
+  imports.push(`      ../../generated/${node.id}-deploy-metadata.nix`);
   const importBlock = imports.join("\n");
   const enables = [...new Set(node.roles.map((role) => roleEnables[role]).filter(Boolean))]
     .sort()
@@ -156,13 +167,51 @@ function renderHostDefault(cluster, node) {
     [
 ${importBlock}
     ]
-    ++ lib.optional (builtins.pathExists ./overrides.nix) ./overrides.nix
-    ++ lib.optional (builtins.pathExists ./disko.nix) ./disko.nix;
+    ++ lib.optional (builtins.pathExists ./network.nix) ./network.nix
+    ++ lib.optional (builtins.pathExists ./disko.nix) ./disko.nix
+    ++ lib.optional (builtins.pathExists ./secrets.nix) ./secrets.nix
+    ++ lib.optional (builtins.pathExists ./overrides.nix) ./overrides.nix;
 
   networking.hostName = lib.mkDefault "${node.id}";
   nixpkgs.hostPlatform = lib.mkDefault "${node.system}";
 ${enables ? `\n${enables}\n` : ""}
 ${agentConfig}  system.stateVersion = lib.mkDefault "25.05";
+}
+`;
+}
+
+function renderHostReadme(node) {
+  return `# ${node.id}
+
+This directory is generated as a NixOS host scaffold.
+
+Consumer-owned extension points:
+
+- \`network.nix\` for static addresses, gateways, firewall, DNS, and VPN wiring.
+- \`disko.nix\` for host-specific disk layout.
+- \`secrets.nix\` for host-specific secret mounts and activation details.
+- \`overrides.nix\` for local module options that should stay outside generated defaults.
+
+The renderer imports those files only when they already exist and never generates
+or overwrites them.
+`;
+}
+
+function renderDeployMetadata(node) {
+  const attrs = {
+    hostName: node.id,
+    site: node.site,
+    system: node.system,
+    roles: node.roles,
+    capabilities: node.capabilities,
+    ...(node.ssh ? { sshHost: node.ssh.host, sshUser: node.ssh.user, sshPort: node.ssh.port } : {}),
+  };
+
+  return `{ lib, ... }:
+{
+  _module.args.deployMetadata = lib.mkDefault {
+${renderNixAttrs(attrs, 4)}
+  };
 }
 `;
 }
@@ -188,8 +237,28 @@ ${node.taints.map((taint) => `    "${taint}"`).join("\n")}
 `;
 }
 
-function modulesFor(node) {
-  return [...new Set(node.roles.map((role) => roleModules[role]).filter(Boolean))].sort();
+function modulesFor(context, node) {
+  return [...new Set(node.roles.map((role) => roleModuleName(context, role)).filter(Boolean))].sort();
+}
+
+function roleModuleName(context, role) {
+  const registry = context?.blueprintRegistry;
+  const injected = registryRoleModules(registry);
+  return injected?.[role] ?? fallbackRoleModules[role];
+}
+
+function registryRoleModules(registry) {
+  if (!registry) return undefined;
+  if (typeof registry.roleModuleNameForRole === "function") {
+    return new Proxy({}, { get: (_target, role) => registry.roleModuleNameForRole(role) });
+  }
+  if (typeof registry.moduleNameForRole === "function") {
+    return new Proxy({}, { get: (_target, role) => registry.moduleNameForRole(role) });
+  }
+  return registry.roleModuleNames
+    ?? registry.nixosHostRoles?.roleModuleNames
+    ?? registry.nixosHostRoles
+    ?? registry.nixos?.roleModuleNames;
 }
 
 function normalizeNode(id, node) {
@@ -220,6 +289,7 @@ function taintsFor(node) {
 function systemForArch(arch) {
   if (arch === "arm64") return "aarch64-linux";
   if (arch === "armv7") return "armv7l-linux";
+  if (arch === "riscv64") return "riscv64-linux";
   return "x86_64-linux";
 }
 
@@ -236,4 +306,14 @@ function parseSsh(value) {
 
 function sortedEntries(object) {
   return Object.entries(object ?? {}).sort(([left], [right]) => left.localeCompare(right));
+}
+
+function renderNixAttrs(object, indent) {
+  return sortedEntries(object).map(([key, value]) => `${" ".repeat(indent)}${key} = ${nixValue(value)};`).join("\n");
+}
+
+function nixValue(value) {
+  if (Array.isArray(value)) return `[ ${value.map(nixValue).join(" ")} ]`;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
 }

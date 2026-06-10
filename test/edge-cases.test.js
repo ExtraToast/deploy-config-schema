@@ -162,10 +162,10 @@ test("nix-hosts adapter handles empty input, arch variants, ssh forms, and role 
       },
     },
   });
-  const flake = file(files, "flake.nix").content;
-  const pi = file(files, "pi/default.nix").content;
-  const sensor = file(files, "sensor/default.nix").content;
-  const cpLabels = file(files, "cp-labels.nix").content;
+  const flake = file(files, "platform/flake.nix").content;
+  const pi = file(files, "platform/nix/hosts/pi/default.nix").content;
+  const sensor = file(files, "platform/nix/hosts/sensor/default.nix").content;
+  const cpLabels = file(files, "platform/nix/generated/cp-labels.nix").content;
 
   assert.match(flake, /system = "aarch64-linux"/);
   assert.match(flake, /sshOpts = \[ "-p" "2222" \]/);
@@ -175,6 +175,7 @@ test("nix-hosts adapter handles empty input, arch variants, ssh forms, and role 
   assert.match(sensor, /roleNetworkTailscale/);
   assert.match(sensor, /nixpkgs.hostPlatform = lib.mkDefault "armv7l-linux"/);
   assert.match(cpLabels, /node-role\.kubernetes\.io\/control-plane=true:NoSchedule/);
+  assert.ok(file(files, "platform/nix/generated/sensor-deploy-metadata.nix"));
 });
 
 test("vso adapter covers overrides, empty input, path normalization, and optional rollout targets", () => {

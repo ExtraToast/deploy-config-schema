@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import YAML from "yaml";
 import { renderKubernetes } from "../src/adapters/kubernetes.js";
@@ -295,15 +298,60 @@ test("nix-hosts adapter renders flake and guarded host scaffolds from fleet role
   const controlPlane = file(files, "platform/nix/hosts/frankfurt-contabo-1/default.nix").content;
   const gpuWorker = file(files, "platform/nix/hosts/enschede-rx7900xtx-1/default.nix").content;
   const labels = file(files, "platform/nix/generated/enschede-rx7900xtx-1-labels.nix").content;
+  const metadata = file(files, "platform/nix/generated/frankfurt-contabo-1-deploy-metadata.nix").content;
+  const readme = file(files, "platform/nix/hosts/frankfurt-contabo-1/README.md").content;
 
   assert.deepEqual(files, renderNixHosts(context));
   assert.match(flake, /platform-blueprints.url = "github:ExtraToast\/platform-blueprints"/);
   assert.match(flake, /frankfurt-contabo-1 = \{/);
   assert.match(controlPlane, /inputs.platform-blueprints.nixosModules.roleControlPlane/);
-  assert.ok(controlPlane.includes("builtins.pathExists ./overrides.nix"));
+  assert.ok(controlPlane.includes("builtins.pathExists ./network.nix"));
   assert.ok(controlPlane.includes("builtins.pathExists ./disko.nix"));
+  assert.ok(controlPlane.includes("builtins.pathExists ./secrets.nix"));
+  assert.ok(controlPlane.includes("builtins.pathExists ./overrides.nix"));
   assert.match(gpuWorker, /inputs.platform-blueprints.nixosModules.roleGpuAmd/);
   assert.match(gpuWorker, /platformBlueprints.roles.gpuAmd.enable = lib.mkDefault true/);
   assert.match(labels, /"personal-stack\/capability-amd-gpu" = "true";/);
-  assert.equal(files.some((item) => item.path.endsWith("/disko.nix") || item.path.endsWith("/overrides.nix")), false);
+  assert.match(metadata, /roles = \[ "base" "k3s-control-plane" "k3s-worker" \];/);
+  assert.match(metadata, /sshPort = 2222;/);
+  assert.match(readme, /network\.nix/);
+  assert.equal(files.some((item) => item.path.endsWith("/network.nix") || item.path.endsWith("/disko.nix") || item.path.endsWith("/secrets.nix") || item.path.endsWith("/overrides.nix")), false);
+});
+
+test("nix-hosts adapter maps roles through injected blueprint registry", () => {
+  const context = contextFromPlatform(singleNode);
+  context.blueprintRegistry = {
+    nixosHostRoles: {
+      roleModuleNames: {
+        base: "customBase",
+        "k3s-control-plane": "customServer",
+        "k3s-worker": "customAgent",
+      },
+    },
+  };
+
+  const files = renderNixHosts(context);
+  const host = file(files, "platform/nix/hosts/frankfurt-contabo-1/default.nix").content;
+
+  assert.match(host, /inputs.platform-blueprints.nixosModules.customBase/);
+  assert.match(host, /inputs.platform-blueprints.nixosModules.customServer/);
+  assert.match(host, /inputs.platform-blueprints.nixosModules.customAgent/);
+  assert.doesNotMatch(host, /roleControlPlane/);
+});
+
+test("nix-hosts generated Nix files parse when nix-instantiate is available", (t) => {
+  const probe = spawnSync("nix-instantiate", ["--version"], { encoding: "utf8" });
+  if (probe.status !== 0) {
+    t.skip("nix-instantiate is not available; structural nix-hosts assertions cover offline CI");
+    return;
+  }
+
+  const root = mkdtempSync(join(tmpdir(), "deploy-config-schema-nix-"));
+  const files = renderNixHosts(contextFromPlatform(multiSite)).filter((item) => item.path.endsWith(".nix"));
+  for (const generated of files) {
+    const path = join(root, generated.path.replaceAll("/", "__"));
+    writeFileSync(path, generated.content);
+    const parsed = spawnSync("nix-instantiate", ["--parse", path], { encoding: "utf8" });
+    assert.equal(parsed.status, 0, `${generated.path}: ${parsed.stderr}`);
+  }
 });

@@ -1,0 +1,96 @@
+version: 1
+name: full-tree
+domain: example.net
+
+cluster:
+  kind: k3s
+  api: https://203.0.113.20:6443
+  bootstrap: alpha-control-1
+
+gitops:
+  root: platform/cluster/flux
+  environment: production
+  interval: 2m
+
+sites:
+  alpha:
+    kind: vps
+    purpose: primary_cluster_site
+    wan: 203.0.113.20
+  beta:
+    kind: home
+    purpose: worker_site
+    lanIngress: 192.0.2.50
+
+packs:
+  core:
+    - cert-manager
+    - external-dns
+    - traefik-public
+    - traefik-lan
+    - metallb
+    - vso
+  observability:
+    gatus: true
+
+hosts:
+  alpha-control-1:
+    site: alpha
+    system: x86_64-linux
+    roles:
+      - base
+      - k3s-control-plane
+      - k3s-worker
+    capabilities:
+      - public-ingress
+    ssh: deploy@203.0.113.20:2222
+  beta-worker-1:
+    site: beta
+    system: x86_64-linux
+    roles:
+      - base
+      - k3s-worker
+      - utility-host
+    capabilities:
+      - lan-ingress
+      - data-storage
+    ssh: deploy@192.0.2.51
+
+services:
+  controller:
+    group: core
+    namespace: core-system
+    image: ghcr.io/example/controller:1.0.0
+    port: 8081
+  frontend:
+    group: stateless
+    image: ghcr.io/example/frontend:latest
+    port: 3000
+    route: root
+    health: /healthz
+  api:
+    group: stateless
+    namespace: app-system
+    image: ghcr.io/example/api:1.0.0
+    port: 8080
+    route:
+      host: api
+      path: /
+      sso: true
+      origin: edge_direct
+    health: /ready
+  postgres:
+    group: data
+    namespace: data-system
+    image: postgres:16
+    port: 5432
+    route:
+      exposure: internal_only
+    health:
+      path: /
+      expectedStatus: 200
+    storage:
+      - name: postgres-data
+        mount: /var/lib/postgresql/data
+        size: 20Gi
+        node: beta-worker-1
