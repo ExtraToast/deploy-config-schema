@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: data-system
+spec:
+  strategy:
+    type: Recreate
+  template:
+    spec:
+      serviceAccountName: postgres
+      nodeSelector:
+        personal-stack/site: frankfurt
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
+        - name: postgres-config
+          configMap:
+            name: postgres-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: data-system
+spec:
+  ports:
+    - name: db
+      port: 5432
+      targetPort: db
+    - name: metrics
+      port: 9187
+      targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres
+  namespace: data-system
+spec:
+  jobLabel: app.kubernetes.io/name
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scheme: http

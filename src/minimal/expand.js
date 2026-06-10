@@ -447,6 +447,8 @@ function schedulingFor(service) {
   const scheduling = {};
   if (service.schedule?.site) scheduling.site_affinity = service.schedule.site;
   if (service.schedule?.node) scheduling.node_affinity = service.schedule.node;
+  const storageNodes = new Set((service.storage ?? []).map((volume) => volume.node).filter(Boolean));
+  if (!scheduling.node_affinity && storageNodes.size === 1) scheduling.node_affinity = [...storageNodes][0];
   if ((service.schedule?.requiredCapabilities ?? []).length > 0) {
     scheduling.required_capabilities = [...service.schedule.requiredCapabilities].sort();
   }
