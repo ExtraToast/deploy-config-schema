@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import YAML from "yaml";
 import { adapterContract, adapterNames } from "../src/adapters/registry.js";
@@ -17,6 +18,8 @@ import { generatedHeader, renderManagedContent, writeGeneratedFiles } from "../s
 const singleNode = readYaml("../fixtures/platform/single-node.platform.yaml");
 const multiSite = readYaml("../fixtures/platform/multi-site.platform.yaml");
 const fullTree = readYaml("../fixtures/platform/full-tree.platform.yaml");
+const blueprintsRoot = fileURLToPath(new URL("fixtures/blueprint-packs", import.meta.url));
+const blueprintsVersion = "platform-blueprints-v0.0.0-test";
 
 function readYaml(relativePath) {
   return YAML.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
@@ -153,7 +156,7 @@ test("CLI platform commands validate, expand, plan, and render tree", async () =
   assert.equal(await runCli(["validate", "platform", initPath], { stdout: validateStdout, stderr }), 0);
   assert.equal(await runCli(["expand", initPath, "--output", join(root, ".render")], { stdout: expandStdout, stderr }), 0);
   assert.equal(await runCli(["render-plan", initPath, "--target", "edge"], { stdout: planStdout, stderr }), 0);
-  assert.equal(await runCli(["render-tree", initPath, "--output", renderRoot], { stdout: renderStdout, stderr }), 0);
+  assert.equal(await runCli(["render-tree", initPath, "--output", renderRoot, "--blueprints-root", blueprintsRoot, "--blueprints-version", blueprintsVersion], { stdout: renderStdout, stderr }), 0);
 
   assert.equal(JSON.parse(validateStdout.text()).valid, true);
   assert.equal(JSON.parse(validateStdout.text()).results[0].kind, "platform");
@@ -172,8 +175,8 @@ test("CLI render-tree --target all renders full deterministic consumer tree", as
   const stderr = stream();
 
   assert.deepEqual(validatePlatform(fullTree).diagnostics, []);
-  assert.equal(await runCli(["render-plan", fixturePath, "--target", "all", "--output", root], { stdout: planStdout, stderr }), 0);
-  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all"], { stdout: renderStdout, stderr }), 0);
+  assert.equal(await runCli(["render-plan", fixturePath, "--target", "all", "--output", root, "--blueprints-root", blueprintsRoot, "--blueprints-version", blueprintsVersion], { stdout: planStdout, stderr }), 0);
+  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all", "--blueprints-root", blueprintsRoot, "--blueprints-version", blueprintsVersion], { stdout: renderStdout, stderr }), 0);
 
   const plan = YAML.parse(planStdout.text());
   const response = JSON.parse(renderStdout.text());
@@ -182,6 +185,7 @@ test("CLI render-tree --target all renders full deterministic consumer tree", as
 
   assert.deepEqual(paths, [...paths].sort());
   assert.deepEqual(response.plan.targets.map((target) => target.path), plan.targets.map((target) => target.path));
+  assert.equal(response.plan.provenance.blueprints.version, blueprintsVersion);
   assert.ok(paths.includes("platform/flake.nix"));
   assert.ok(paths.includes("platform/nix/hosts/alpha-control-1/default.nix"));
   assert.ok(paths.includes("platform/nix/hosts/beta-worker-1/README.md"));
@@ -190,13 +194,75 @@ test("CLI render-tree --target all renders full deterministic consumer tree", as
   assert.ok(paths.includes("platform/cluster/flux/apps/edge/traefik-ingressroutes.yaml"));
   assert.ok(paths.includes("platform/cluster/flux/apps/stateless/frontend/deployment.yaml"));
   assert.equal(response.results.length, response.plan.targets.length);
-  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all", "--check"], { stdout: checkStdout, stderr }), 0);
+  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all", "--check", "--blueprints-root", blueprintsRoot, "--blueprints-version", blueprintsVersion], { stdout: checkStdout, stderr }), 0);
   assert.deepEqual(snapshotTree(root), renderedSnapshot);
   assert.equal(JSON.parse(checkStdout.text()).ok, true);
 
   writeFileSync(join(root, "platform/nix/generated/beta-worker-1-labels.nix"), `${generatedHeader}\nchanged = true;\n`);
-  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all", "--check"], { stdout: driftStdout, stderr }), 1);
+  assert.equal(await runCli(["render-tree", fixturePath, "--output", root, "--target", "all", "--check", "--blueprints-root", blueprintsRoot, "--blueprints-version", blueprintsVersion], { stdout: driftStdout, stderr }), 1);
   assert.equal(JSON.parse(driftStdout.text()).diagnostics[0].code, "E_RENDER_DIFF");
+});
+
+test("CLI render-tree renders flux packs from pinned snapshot root deterministically", async () => {
+  const firstRoot = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));
+  const secondRoot = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));
+  const firstStdout = stream();
+  const secondStdout = stream();
+  const stderr = stream();
+  const args = [
+    "render-tree",
+    "fixtures/platform/full-tree.platform.yaml",
+    "--target",
+    "flux-packs",
+    "--blueprints-root",
+    blueprintsRoot,
+    "--blueprints-version",
+    blueprintsVersion,
+  ];
+
+  assert.equal(await runCli([...args, "--output", firstRoot], { stdout: firstStdout, stderr }), 0);
+  assert.equal(await runCli([...args, "--output", secondRoot], { stdout: secondStdout, stderr }), 0);
+
+  const first = JSON.parse(firstStdout.text());
+  const second = JSON.parse(secondStdout.text());
+  assert.equal(first.plan.provenance.blueprints.source, "platform-blueprints-checkout");
+  assert.equal(first.plan.provenance.blueprints.version, blueprintsVersion);
+  const firstSnapshot = snapshotTree(firstRoot);
+  assert.ok(Object.hasOwn(firstSnapshot, "platform/cluster/flux/apps/observability/gatus/deployment.yaml"));
+  assert.deepEqual(firstSnapshot, snapshotTree(secondRoot));
+  assert.deepEqual(first.results.map((result) => result.path), second.results.map((result) => result.path));
+});
+
+test("CLI blueprint-backed adapters require explicit available packs root", async () => {
+  const root = mkdtempSync(join(tmpdir(), "deploy-config-schema-platform-"));
+  const missingRootStdout = stream();
+  const missingRootStderr = stream();
+  const badRootStdout = stream();
+  const badRootStderr = stream();
+  const badRoot = join(root, "not-blueprints");
+  mkdirSync(badRoot, { recursive: true });
+
+  const missingRootExit = await runCli([
+    "render-tree",
+    "fixtures/platform/full-tree.platform.yaml",
+    "--output",
+    root,
+    "--target",
+    "flux-packs",
+  ], { stdout: missingRootStdout, stderr: missingRootStderr });
+  const badRootExit = await runCli([
+    "render-plan",
+    "fixtures/platform/full-tree.platform.yaml",
+    "--target",
+    "flux-packs",
+    "--blueprints-root",
+    badRoot,
+  ], { stdout: badRootStdout, stderr: badRootStderr });
+
+  assert.equal(missingRootExit, 1);
+  assert.equal(JSON.parse(missingRootStderr.text()).diagnostics[0].code, "E_BLUEPRINTS_ROOT_MISSING");
+  assert.equal(badRootExit, 1);
+  assert.equal(JSON.parse(badRootStderr.text()).diagnostics[0].code, "E_BLUEPRINTS_PACKS_UNAVAILABLE");
 });
 
 test("CLI render-tree preserves consumer-owned nix override modules", async () => {

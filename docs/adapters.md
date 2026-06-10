@@ -17,6 +17,12 @@ The Round-2 MVP validates the full deploy config shape and implements the common
 - `flux-source`: renders Flux `HelmRepository`, OCI-style Helm repository, and `HelmRelease` manifests for known core/data packs and declared chart services. Known platform pack sources/releases are grounded in `platform-blueprints/packs/**`; declared charts can provide `source`, `chart`, `namespace`, `interval`, and `values`.
 - `flux-packs`: composes known `platform-blueprints/packs/**` manifests into consumer-owned `platform/cluster/flux/apps/**` paths. It fills placeholders from platform data and substitutions, leaves source/release ownership to `flux-source`, rewrites the Gatus pack to consume the generated endpoints ConfigMap, and emits group `kustomization.yaml` files for copied pack directories.
 
+Blueprint-backed Flux adapters require an explicit pinned `platform-blueprints`
+checkout. Use `--blueprints-root <dir>` or `DEPLOY_CONFIG_BLUEPRINTS_ROOT` to
+point at the checkout, and pass `--blueprints-version <tag>` to record the
+declared platform-blueprints tag/ref in render plan provenance. The toolkit does
+not guess a local checkout path.
+
 ### `kubernetes`
 
 Input: canonical artifacts, primarily `service-intent`, with `fleet-inventory` placement data and `vault-dynamic-secrets` Secret targets.

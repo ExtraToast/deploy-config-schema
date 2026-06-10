@@ -5,6 +5,7 @@ import { loadConfig, ConfigLoadError } from "./config-loader.js";
 import { validateConfig } from "./validator.js";
 import { artifactKinds, isArtifactKind, validateArtifact } from "./artifact-validator.js";
 import { adapterContract, adapterNames, getAdapter } from "./adapters/registry.js";
+import { resolveBlueprintRegistry } from "./blueprints/registry.js";
 import { expandPlatform } from "./minimal/expand.js";
 import { validatePlatform } from "./minimal/schema.js";
 import { createRenderPlan, renderPlanFiles } from "./render-plan/plan.js";
@@ -140,7 +141,17 @@ function runRenderPlan(args, streams) {
     writeValidationResult(streams.stderr, expanded.validation);
     return 1;
   }
-  const plan = createRenderPlan(expanded.expansion, { target: options.target ?? "all", output: options.output ?? "." });
+  const blueprints = resolveBlueprintsForRender(expanded.expansion, options);
+  if (!blueprints.ok) {
+    writeDiagnostics(streams.stderr, blueprints.diagnostics);
+    return 1;
+  }
+  const plan = createRenderPlan(expanded.expansion, {
+    target: options.target ?? "all",
+    output: options.output ?? ".",
+    blueprintRegistry: blueprints.registry,
+    blueprints: blueprints.provenance,
+  });
   streams.stdout.write(`${stringifyYaml(plan)}\n`);
   return 0;
 }
@@ -156,8 +167,20 @@ function runRenderTree(args, streams) {
     writeValidationResult(streams.stderr, expanded.validation);
     return 1;
   }
-  const plan = createRenderPlan(expanded.expansion, { target: options.target ?? "all", output: options.output ?? "." });
-  const files = renderPlanFiles(expanded.expansion, plan);
+  const blueprints = resolveBlueprintsForRender(expanded.expansion, options);
+  if (!blueprints.ok) {
+    writeDiagnostics(streams.stderr, blueprints.diagnostics);
+    return 1;
+  }
+  const plan = createRenderPlan(expanded.expansion, {
+    target: options.target ?? "all",
+    output: options.output ?? ".",
+    blueprintRegistry: blueprints.registry,
+    blueprints: blueprints.provenance,
+  });
+  const files = renderPlanFiles(expanded.expansion, plan, {
+    blueprintRegistry: blueprints.registry,
+  });
   const result = writeGeneratedFiles(files, {
     root: options.output ?? ".",
     dryRun: options.dryRun,
@@ -437,6 +460,30 @@ function parseOptions(args) {
         options.target = value;
         index += 1;
       }
+    } else if (arg === "--blueprints-root") {
+      const value = args[index + 1];
+      if (!value) {
+        diagnostics.push({
+          code: "E_USAGE",
+          message: "--blueprints-root requires a directory",
+          path: "/",
+        });
+      } else {
+        options.blueprintsRoot = value;
+        index += 1;
+      }
+    } else if (arg === "--blueprints-version") {
+      const value = args[index + 1];
+      if (!value) {
+        diagnostics.push({
+          code: "E_USAGE",
+          message: "--blueprints-version requires a tag or ref",
+          path: "/",
+        });
+      } else {
+        options.blueprintsVersion = value;
+        index += 1;
+      }
     } else if (arg === "--force") {
       options.force = true;
     } else if (arg === "--dry-run") {
@@ -457,6 +504,25 @@ function parseOptions(args) {
   }
 
   return { positionals, options, diagnostics };
+}
+
+function resolveBlueprintsForRender(expansion, options) {
+  if (!selectedAdaptersNeedBlueprints(expansion, options.target ?? "all")) {
+    return { ok: true };
+  }
+  return resolveBlueprintRegistry({
+    root: options.blueprintsRoot,
+    version: options.blueprintsVersion,
+  });
+}
+
+function selectedAdaptersNeedBlueprints(expansion, target) {
+  const selectedAdapters = expansion.artifacts["deploy-config"].adapter_output_intent.adapters;
+  return selectedAdapters
+    .map((adapterName) => getAdapter(adapterName))
+    .filter(Boolean)
+    .filter((adapter) => target === "all" || adapter.target === target || adapter.name === target)
+    .some((adapter) => ["flux-packs", "flux-source"].includes(adapter.name));
 }
 
 function writeExpandedArtifacts(artifacts, output) {
@@ -511,8 +577,8 @@ function usage() {
     "  deploy-config-schema validate <kind|auto> <file...> [--format json|text]",
     "  deploy-config-schema init platform --template single-node|multi-site --output <path>",
     "  deploy-config-schema expand <platform.yaml> [--output <dir>]",
-    "  deploy-config-schema render-plan <platform.yaml> [--target edge|adapter] [--output <root>]",
-    "  deploy-config-schema render-tree <platform.yaml> --output <root> [--target edge|adapter] [--dry-run|--diff|--check|--force]",
+    "  deploy-config-schema render-plan <platform.yaml> [--target edge|adapter] [--output <root>] [--blueprints-root <dir>] [--blueprints-version <tag>]",
+    "  deploy-config-schema render-tree <platform.yaml> --output <root> [--target edge|adapter] [--dry-run|--diff|--check|--force] [--blueprints-root <dir>] [--blueprints-version <tag>]",
     "  deploy-config-schema render <adapter> <config> [--input deploy-config|service-intent] [--output <path>]",
     "  deploy-config-schema adapter-contract",
     "",
