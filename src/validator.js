@@ -1,9 +1,5 @@
 import Ajv2020 from "ajv/dist/2020.js";
-import { readFileSync } from "node:fs";
-
-const schema = JSON.parse(
-  readFileSync(new URL("../schemas/deploy-config.schema.json", import.meta.url), "utf8"),
-);
+import { deployConfigJsonSchema as schema } from "./schemas/generated-json.js";
 
 const ajv = new Ajv2020({
   allErrors: true,

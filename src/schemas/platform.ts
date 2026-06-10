@@ -1,4 +1,6 @@
-{
+import { jsonSchemaBackedZodSchema } from "./support.js";
+
+export const platformJsonSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.extratoast.com/platform.schema.json",
   "title": "ExtraToast Minimal Platform Intent",
@@ -463,4 +465,8 @@
       }
     }
   }
-}
+} as const;
+
+export const platformSchema = jsonSchemaBackedZodSchema(platformJsonSchema);
+
+export type PlatformSchemaInput = unknown;

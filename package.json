@@ -3,18 +3,24 @@
   "version": "0.6.0",
   "description": "JSON Schema and CLI contract for deploy and infrastructure config artifacts.",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "bin": {
-    "deploy-config-schema": "./bin/deploy-config-schema.js"
+    "deploy-config-schema": "./dist/bin/deploy-config-schema.js"
   },
   "exports": {
-    ".": "./src/index.js",
-    "./schemas/platform": "./schemas/platform.schema.json",
-    "./schema": "./schemas/deploy-config.schema.json",
-    "./schemas/round3/service-intent": "./schemas/round3/service-intent.schema.json",
-    "./schemas/round3/fleet-inventory": "./schemas/round3/fleet-inventory.schema.json",
-    "./schemas/round3/vault-dynamic-secrets": "./schemas/round3/vault-dynamic-secrets.schema.json"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./schemas/platform": "./dist/schemas/platform.schema.json",
+    "./schema": "./dist/schemas/deploy-config.schema.json",
+    "./schemas/round3/service-intent": "./dist/schemas/round3/service-intent.schema.json",
+    "./schemas/round3/fleet-inventory": "./dist/schemas/round3/fleet-inventory.schema.json",
+    "./schemas/round3/vault-dynamic-secrets": "./dist/schemas/round3/vault-dynamic-secrets.schema.json"
   },
   "files": [
+    "dist/",
     "bin/",
     "schemas/",
     "src/",
@@ -23,9 +29,14 @@
     "fixtures/"
   ],
   "scripts": {
-    "test": "npm run test:coverage",
-    "test:coverage": "c8 --all --include \"src/**/*.js\" --check-coverage --lines 90 --branches 80 node --test",
-    "test:unit": "node --test",
+    "build": "tsc && npm run build:schemas && node scripts/copy-dist-assets.js",
+    "build:schemas": "node dist/scripts/generate-schemas.js",
+    "check:schemas": "node dist/scripts/generate-schemas.js --check",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build",
+    "test": "npm run build && npm run check:schemas && npm run test:coverage",
+    "test:coverage": "c8 --all --include \"dist/src/**/*.js\" --exclude \"dist/src/schemas/**/*.js\" --check-coverage --lines 90 --branches 80 node --test \"dist/test/**/*.test.js\"",
+    "test:unit": "npm run build && node --test \"dist/test/**/*.test.js\"",
     "validate:schema": "node scripts/validate-schema.js",
     "validate:sample": "node bin/deploy-config-schema.js validate auto samples/deploy-config.yaml fixtures/platform/single-node.platform.yaml fixtures/round4/service-intent-renderable.sample.yaml fixtures/round3/fleet-inventory.sample.yaml fixtures/round3/vault-dynamic-secrets.sample.yaml",
     "validate:artifacts": "node bin/deploy-config-schema.js validate auto",
@@ -46,13 +57,17 @@
   },
   "dependencies": {
     "ajv": "^8.17.1",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.25.2"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "c8": "^11.0.0"
+    "@types/node": "^22.19.20",
+    "c8": "^11.0.0",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

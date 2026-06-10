@@ -1,4 +1,6 @@
-{
+import { jsonSchemaBackedZodSchema } from "./support.js";
+
+export const serviceIntentJsonSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.extratoast.com/round3/service-intent.schema.json",
   "title": "ExtraToast Round 3 Service Intent Skeleton",
@@ -1095,4 +1097,8 @@
       }
     }
   }
-}
+} as const;
+
+export const serviceIntentSchema = jsonSchemaBackedZodSchema(serviceIntentJsonSchema);
+
+export type ServiceIntentSchemaInput = unknown;

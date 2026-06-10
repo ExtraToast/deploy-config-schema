@@ -1,4 +1,6 @@
-{
+import { jsonSchemaBackedZodSchema } from "./support.js";
+
+export const vaultDynamicSecretsJsonSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.extratoast.com/round3/vault-dynamic-secrets.schema.json",
   "title": "ExtraToast Round 3 Vault Dynamic Secret Input Skeleton",
@@ -654,4 +656,8 @@
       }
     }
   }
-}
+} as const;
+
+export const vaultDynamicSecretsSchema = jsonSchemaBackedZodSchema(vaultDynamicSecretsJsonSchema);
+
+export type VaultDynamicSecretsSchemaInput = unknown;

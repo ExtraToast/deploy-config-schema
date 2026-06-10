@@ -1,4 +1,6 @@
-{
+import { jsonSchemaBackedZodSchema } from "./support.js";
+
+export const fleetInventoryJsonSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.extratoast.com/round3/fleet-inventory.schema.json",
   "title": "ExtraToast Round 3 Fleet Inventory Extension Skeleton",
@@ -612,4 +614,8 @@
       }
     }
   }
-}
+} as const;
+
+export const fleetInventorySchema = jsonSchemaBackedZodSchema(fleetInventoryJsonSchema);
+
+export type FleetInventorySchemaInput = unknown;

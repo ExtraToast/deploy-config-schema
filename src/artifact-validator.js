@@ -1,11 +1,15 @@
 import Ajv2020 from "ajv/dist/2020.js";
-import { readFileSync } from "node:fs";
 import { validateConfig } from "./validator.js";
+import {
+  fleetInventoryJsonSchema,
+  serviceIntentJsonSchema,
+  vaultDynamicSecretsJsonSchema,
+} from "./schemas/generated-json.js";
 
 const artifactSchemas = {
-  "service-intent": "../schemas/round3/service-intent.schema.json",
-  "fleet-inventory": "../schemas/round3/fleet-inventory.schema.json",
-  "vault-dynamic-secrets": "../schemas/round3/vault-dynamic-secrets.schema.json",
+  "service-intent": serviceIntentJsonSchema,
+  "fleet-inventory": fleetInventoryJsonSchema,
+  "vault-dynamic-secrets": vaultDynamicSecretsJsonSchema,
 };
 
 const validators = new Map();
@@ -47,8 +51,7 @@ function validatorFor(kind) {
   }
   if (!validators.has(kind)) {
     const ajv = new Ajv2020({ allErrors: true, strict: false });
-    const schema = JSON.parse(readFileSync(new URL(artifactSchemas[kind], import.meta.url), "utf8"));
-    validators.set(kind, ajv.compile(schema));
+    validators.set(kind, ajv.compile(artifactSchemas[kind]));
   }
   return validators.get(kind);
 }
