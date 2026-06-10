@@ -14,13 +14,13 @@ test("edge catalog renders deterministic ConfigMap entries for exposure intent",
   assert.match(first, /kind: ConfigMap/);
   assert.match(first, /name: platform-edge-catalog/);
   assert.match(first, /edge-catalog\.yaml: \|/);
-  assert.match(first, /cluster: personal-stack/);
-  assert.match(first, /name: app-ui/);
-  assert.match(first, /exposure: public/);
-  assert.match(first, /access: direct/);
-  assert.match(first, /host: example\.net/);
-  assert.match(first, /name: vault/);
-  assert.match(first, /access: cluster_internal/);
+  assert.match(first, /cluster: "personal-stack"/);
+  assert.match(first, /name: "app-ui"/);
+  assert.match(first, /exposure: "public"/);
+  assert.match(first, /access: "direct"/);
+  assert.match(first, /host: "example\.net"/);
+  assert.match(first, /name: "vault"/);
+  assert.match(first, /access: "cluster_internal"/);
 });
 
 test("edge route catalog renders generic route rules with path exceptions", () => {
@@ -28,10 +28,10 @@ test("edge route catalog renders generic route rules with path exceptions", () =
 
   assert.match(rendered, /name: platform-edge-route-catalog/);
   assert.match(rendered, /edge-route-catalog\.yaml: \|/);
-  assert.match(rendered, /name: assistant-api-health/);
-  assert.match(rendered, /service: assistant-api/);
+  assert.match(rendered, /name: "assistant-api-health"/);
+  assert.match(rendered, /service: "assistant-api"/);
   assert.match(rendered, /exact_paths:/);
-  assert.match(rendered, /- \/api\/actuator\/health/);
-  assert.match(rendered, /excluded_exact_paths:/);
-  assert.match(rendered, /host: assistant\.example\.net/);
+  assert.match(rendered, /- "\/api\/actuator\/health"/);
+  assert.match(rendered, /excluded_paths:/);
+  assert.match(rendered, /host: "assistant\.example\.net"/);
 });

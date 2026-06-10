@@ -49,7 +49,7 @@ export function renderEdgeRouteCatalog(config) {
       copyList(entry, "path_prefixes", route.path_prefixes);
       copyList(entry, "exact_paths", route.exact_paths);
       copyList(entry, "excluded_path_prefixes", route.excluded_path_prefixes);
-      copyList(entry, "excluded_exact_paths", route.excluded_exact_paths);
+      copyList(entry, "excluded_paths", route.excluded_exact_paths);
       return entry;
     });
 

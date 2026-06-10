@@ -62,6 +62,13 @@ export function renderConfigMap({ name, namespace, dataKey, document }) {
     indent: 2,
     lineWidth: 0,
     sortMapEntries: false,
+    // Match the upstream renderer's embedded-document style for byte parity:
+    // a leading `---` document marker, double-quoted string scalars, plain
+    // keys, and block sequences whose `-` is not extra-indented.
+    directives: true,
+    defaultStringType: "QUOTE_DOUBLE",
+    defaultKeyType: "PLAIN",
+    indentSeq: false,
   }).trimEnd();
 
   return [

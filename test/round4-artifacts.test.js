@@ -141,13 +141,13 @@ test("service-intent normalizer feeds existing generic catalog renderer", () => 
   const config = normalizeServiceIntentForRender(renderableServiceIntent);
   const rendered = renderEdgeCatalog(config);
 
-  assert.match(rendered, /cluster: example-cluster/);
-  assert.match(rendered, /name: api-service/);
-  assert.match(rendered, /exposure: public/);
-  assert.match(rendered, /access: sso_protected/);
-  assert.match(rendered, /host: api\.example\.net/);
-  assert.match(rendered, /name: worker-cron/);
-  assert.match(rendered, /exposure: internal_only/);
+  assert.match(rendered, /cluster: "example-cluster"/);
+  assert.match(rendered, /name: "api-service"/);
+  assert.match(rendered, /exposure: "public"/);
+  assert.match(rendered, /access: "sso_protected"/);
+  assert.match(rendered, /host: "api\.example\.net"/);
+  assert.match(rendered, /name: "worker-cron"/);
+  assert.match(rendered, /exposure: "internal_only"/);
 });
 
 test("CLI validates standalone artifacts and renders service-intent through implemented adapters", async () => {
@@ -172,8 +172,8 @@ test("CLI validates standalone artifacts and renders service-intent through impl
   assert.equal(renderExitCode, 0);
   assert.equal(renderStderr.text(), "");
   assert.match(renderStdout.text(), /name: service-intent-gatus-endpoints/);
-  assert.match(renderStdout.text(), /name: api-service \(internal\)/);
-  assert.match(renderStdout.text(), /url: https:\/\/api\.example\.net\/api\/health/);
+  assert.match(renderStdout.text(), /name: "api-service \(internal\)"/);
+  assert.match(renderStdout.text(), /url: "https:\/\/api\.example\.net\/api\/health"/);
 });
 
 test("CLI requires renderer domain before rendering service-intent input", async () => {

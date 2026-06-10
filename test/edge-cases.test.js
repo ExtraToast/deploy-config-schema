@@ -108,12 +108,12 @@ test("gatus renders protected, hostless, tcp, explicit, and default probe strate
   const endpoints = YAML.parse(rendered).data["endpoints.yaml"];
 
   assert.match(rendered, /name: custom-gatus/);
-  assert.match(endpoints, /name: web \(internal\)/);
-  assert.match(endpoints, /name: web \(external\)/);
-  assert.match(endpoints, /url: tcp:\/\/tcp\.default\.svc\.cluster\.local:5432/);
-  assert.match(endpoints, /name: protected/);
+  assert.match(endpoints, /name: "web \(internal\)"/);
+  assert.match(endpoints, /name: "web \(external\)"/);
+  assert.match(endpoints, /url: "tcp:\/\/tcp\.default\.svc\.cluster\.local:5432"/);
+  assert.match(endpoints, /name: "protected"/);
   assert.doesNotMatch(endpoints, /hostless \(external\)/);
-  assert.match(endpoints, /name: metrics-grpc/);
+  assert.match(endpoints, /name: "metrics-grpc"/);
   assert.match(endpoints, /\[RESPONSE_TIME\] < 500/);
 });
 
