@@ -14,6 +14,7 @@ export function renderKubernetes(context) {
 
   return sortedEntries(serviceIntent.services).flatMap(([serviceName, service]) => {
     if (service.kubernetes?.render_status === "implemented_elsewhere") return [];
+    validateService(serviceName, service);
     const namespace = service.kubernetes?.namespace_ref ?? "default";
     const group = serviceGroups.get(serviceName) ?? groupForNamespace(namespace);
     const basePath = `${appsRoot}/${group}/${serviceName}`;
@@ -47,13 +48,21 @@ export function renderKubernetes(context) {
       files.push(file(basePath, "pdb.yaml", docs.policy));
       resources.push("pdb.yaml");
     }
+    if (docs.autoscaling.length > 0) {
+      files.push(file(basePath, "hpa.yaml", docs.autoscaling));
+      resources.push("hpa.yaml");
+    }
     if (docs.monitoring.length > 0) {
-      files.push(file(basePath, "servicemonitor.yaml", docs.monitoring.filter((doc) => doc.kind === "ServiceMonitor")));
+      files.push(file(basePath, "servicemonitor.yaml", docs.monitoring));
       resources.push("servicemonitor.yaml");
     }
     if (docs.podMonitoring.length > 0) {
       files.push(file(basePath, "podmonitor.yaml", docs.podMonitoring));
       resources.push("podmonitor.yaml");
+    }
+    if (docs.raw.length > 0) {
+      files.push(file(basePath, "raw.yaml", docs.raw));
+      resources.push("raw.yaml");
     }
 
     files.push({
@@ -77,11 +86,13 @@ function serviceDocuments(serviceName, service, namespace, vaultSecrets, artifac
   const config = configMapManifest(serviceName, service, namespace);
   const storage = storageManifests(serviceName, service, namespace);
   const policy = pdbManifest(serviceName, service, namespace);
+  const autoscaling = hpaManifest(serviceName, service, namespace);
   const monitors = monitorManifests(serviceName, service, namespace).filter((doc) => doc.kind === "ServiceMonitor");
   const podMonitors = monitorManifests(serviceName, service, namespace).filter((doc) => doc.kind === "PodMonitor");
+  const raw = rawManifests(service, namespace);
 
   if (workloadKind === "external_service" || workloadKind === "host_native" || workloadKind === "nomad_job") {
-    return { workload: serviceDoc ? [serviceDoc] : [], config: [], storage, policy: [], monitoring: monitors, podMonitoring: podMonitors };
+    return { workload: serviceDoc ? [serviceDoc] : [], config: [], storage, policy: [], autoscaling: [], monitoring: monitors, podMonitoring: podMonitors, raw };
   }
 
   return {
@@ -89,8 +100,10 @@ function serviceDocuments(serviceName, service, namespace, vaultSecrets, artifac
     config: config ? [config] : [],
     storage,
     policy: policy ? [policy] : [],
+    autoscaling: autoscaling ? [autoscaling] : [],
     monitoring: monitors,
     podMonitoring: podMonitors,
+    raw,
   };
 }
 
@@ -109,6 +122,10 @@ function controllerManifest(kind, serviceName, service, namespace, vaultSecrets,
     template: podTemplate(serviceName, service, vaultSecrets, artifacts),
   };
   if (kind === "StatefulSet") spec.serviceName = service.kubernetes?.service_ref ?? serviceName;
+  if (kind === "StatefulSet") {
+    const templates = volumeClaimTemplates(serviceName, service);
+    if (templates.length > 0) spec.volumeClaimTemplates = templates;
+  }
   if (kind === "Deployment") {
     spec.strategy = deploymentStrategy(service);
     if (service.rollout?.update_strategy === "latest_tag" || service.image?.tag === "latest") {
@@ -151,10 +168,15 @@ function cronJobManifest(serviceName, service, namespace, vaultSecrets, artifact
 }
 
 function podTemplate(serviceName, service, vaultSecrets, artifacts, options = {}) {
+  const runtime = service.runtime ?? {};
   const spec = {
-    containers: [container(serviceName, service, vaultSecrets)],
+    containers: [
+      container(serviceName, service, vaultSecrets),
+      ...(runtime.sidecars ?? []).map(containerLike),
+    ],
     restartPolicy: options.restartPolicy ?? service.workload?.restart_policy ?? "Always",
   };
+  if ((runtime.init_containers ?? []).length > 0) spec.initContainers = runtime.init_containers.map(containerLike);
   const pullSecrets = service.image?.pull_secrets ?? [];
   if (pullSecrets.length > 0) spec.imagePullSecrets = pullSecrets.map((name) => ({ name }));
   const accountName = serviceAccountName(service, serviceName);
@@ -162,6 +184,7 @@ function podTemplate(serviceName, service, vaultSecrets, artifacts, options = {}
   const volumes = podVolumes(serviceName, service);
   if (volumes.length > 0) spec.volumes = volumes;
   Object.assign(spec, schedulingSpec(serviceName, service, artifacts));
+  Object.assign(spec, cloneSorted(service.kubernetes?.pod_spec ?? {}));
   return {
     metadata: { labels: labels(serviceName) },
     spec,
@@ -184,6 +207,14 @@ function container(serviceName, service, vaultSecrets) {
   const env = envVars(serviceName, service, vaultSecrets);
   if (env.length > 0) item.env = env;
   if ((runtime.args ?? []).length > 0) item.args = [...runtime.args];
+  if ((runtime.env_from ?? []).length > 0) {
+    item.envFrom = runtime.env_from.map((ref) => ({
+      secretRef: {
+        name: ref.name,
+        ...(ref.optional !== undefined ? { optional: ref.optional } : {}),
+      },
+    }));
+  }
   const mounts = volumeMounts(service);
   if (mounts.length > 0) item.volumeMounts = mounts;
   const probe = probeFor(service);
@@ -192,6 +223,18 @@ function container(serviceName, service, vaultSecrets) {
     item.livenessProbe = structuredClone(probe);
   }
   return item;
+}
+
+function containerLike(item) {
+  const result = {
+    name: item.name,
+    image: `${item.image.repository}:${item.image.tag}`,
+    imagePullPolicy: item.image.pull_policy ?? (item.image.tag === "latest" ? "Always" : "IfNotPresent"),
+  };
+  if ((item.args ?? []).length > 0) result.args = [...item.args];
+  const env = sortedEntries(item.env ?? {}).map(([name, value]) => ({ name, value }));
+  if (env.length > 0) result.env = env;
+  return result;
 }
 
 function envVars(serviceName, service, vaultSecrets) {
@@ -246,7 +289,10 @@ function serviceManifest(serviceName, service, namespace) {
 }
 
 function configMapManifest(serviceName, service, namespace) {
-  const data = sortObject(service.runtime?.env ?? {});
+  const data = sortObject({
+    ...(service.runtime?.env ?? {}),
+    ...(service.runtime?.files ?? {}),
+  });
   if (Object.keys(data).length === 0) return undefined;
   return {
     apiVersion: "v1",
@@ -258,12 +304,18 @@ function configMapManifest(serviceName, service, namespace) {
 
 function storageManifests(serviceName, service, namespace) {
   return (service.storage?.volumes ?? [])
-    .filter((volume) => volume.kind === "pvc" || volume.kind === "host_path")
+    .filter((volume) => (volume.kind === "pvc" || volume.kind === "host_path") && !volume.claim_template)
     .flatMap((volume) => {
       const claim = pvcManifest(serviceName, volume, namespace);
       if (volume.kind !== "host_path") return [claim];
       return [pvManifest(serviceName, volume, service), claim];
     });
+}
+
+function volumeClaimTemplates(serviceName, service) {
+  return (service.storage?.volumes ?? [])
+    .filter((volume) => volume.claim_template)
+    .map((volume) => pvcManifest(serviceName, volume, undefined));
 }
 
 function pvManifest(serviceName, volume, service) {
@@ -332,6 +384,52 @@ function pdbManifest(serviceName, service, namespace) {
     metadata: metadata(serviceName, namespace),
     spec,
   };
+}
+
+function hpaManifest(serviceName, service, namespace) {
+  const autoscaling = service.rollout?.autoscaling;
+  if (!autoscaling?.enabled) return undefined;
+  const metrics = [];
+  if (autoscaling.target_cpu_utilization !== undefined) {
+    metrics.push(resourceMetric("cpu", autoscaling.target_cpu_utilization));
+  }
+  if (autoscaling.target_memory_utilization !== undefined) {
+    metrics.push(resourceMetric("memory", autoscaling.target_memory_utilization));
+  }
+  return {
+    apiVersion: "autoscaling/v2",
+    kind: "HorizontalPodAutoscaler",
+    metadata: metadata(serviceName, namespace),
+    spec: {
+      scaleTargetRef: {
+        apiVersion: "apps/v1",
+        kind: workloadApiKind(service),
+        name: serviceName,
+      },
+      minReplicas: autoscaling.min_replicas ?? 1,
+      maxReplicas: autoscaling.max_replicas,
+      ...(metrics.length > 0 ? { metrics } : {}),
+    },
+  };
+}
+
+function resourceMetric(name, averageUtilization) {
+  return {
+    type: "Resource",
+    resource: {
+      name,
+      target: {
+        type: "Utilization",
+        averageUtilization,
+      },
+    },
+  };
+}
+
+function workloadApiKind(service) {
+  const kind = service.workload?.kind ?? "deployment";
+  if (kind === "statefulset") return "StatefulSet";
+  return "Deployment";
 }
 
 function monitorManifests(serviceName, service, namespace) {
@@ -405,7 +503,7 @@ function serviceIntentClusterName(artifacts) {
 }
 
 function podVolumes(serviceName, service) {
-  return (service.storage?.volumes ?? []).map((volume) => {
+  return (service.storage?.volumes ?? []).filter((volume) => !volume.claim_template).map((volume) => {
     if (volume.kind === "config_map") return { name: volume.name, configMap: { name: volume.name } };
     if (volume.kind === "secret") return { name: volume.name, secret: { secretName: volume.name } };
     if (volume.kind === "empty_dir" || volume.kind === "ephemeral") return { name: volume.name, emptyDir: {} };
@@ -434,6 +532,75 @@ function probeFor(service) {
     },
     timeoutSeconds: 5,
   };
+}
+
+function rawManifests(service, namespace) {
+  return (service.kubernetes?.raw_manifests ?? []).map((manifest) => withDefaultNamespace(cloneSorted(manifest), namespace));
+}
+
+function withDefaultNamespace(manifest, namespace) {
+  if (!manifest?.metadata || manifest.metadata.namespace || manifest.kind === "Namespace") return manifest;
+  return {
+    ...manifest,
+    metadata: {
+      ...manifest.metadata,
+      namespace,
+    },
+  };
+}
+
+function validateService(serviceName, service) {
+  const declaredPorts = new Set((service.ports ?? []).map((port) => port.name));
+  for (const route of service.networking?.routes ?? []) {
+    assertDeclared(declaredPorts, route.port, `service ${serviceName} route ${route.name} references undeclared port ${route.port}`);
+  }
+  for (const probe of service.gatus?.endpoints ?? []) {
+    assertDeclared(declaredPorts, probe.port, `service ${serviceName} probe ${probe.name} references undeclared port ${probe.port}`);
+  }
+  for (const monitor of service.observability?.metrics ?? []) {
+    assertDeclared(declaredPorts, monitor.port, `service ${serviceName} ${monitor.kind} references undeclared port ${monitor.port}`);
+  }
+
+  const declaredVolumes = new Set((service.storage?.volumes ?? []).map((volume) => volume.name));
+  for (const mount of service.storage?.mounts ?? []) {
+    assertDeclared(declaredVolumes, mount.volume, `service ${serviceName} mount ${mount.path} references undeclared volume ${mount.volume}`);
+  }
+
+  for (const volume of service.storage?.volumes ?? []) {
+    if (volume.kind !== "host_path" || volume.portable) continue;
+    if (!service.scheduling?.node_affinity && !service.scheduling?.site_affinity && (service.scheduling?.required_capabilities ?? []).length === 0) {
+      throw new Error(`service ${serviceName} host_path volume ${volume.name} requires node or host affinity unless marked portable`);
+    }
+  }
+
+  for (const secret of service.secrets ?? []) {
+    rejectSecretMaterial(secret, `service ${serviceName} secret ${secret.name}`);
+  }
+  for (const manifest of service.kubernetes?.raw_manifests ?? []) {
+    rejectRawSecret(manifest, `service ${serviceName} raw manifest ${manifest.kind ?? "unknown"}`);
+  }
+}
+
+function assertDeclared(declared, value, message) {
+  if (!value || declared.has(value)) return;
+  throw new Error(message);
+}
+
+function rejectSecretMaterial(value, path) {
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if (["value", "values", "data", "stringData", "literal", "secret_value"].includes(key)) {
+      throw new Error(`${path} contains secret material in ${key}; use a secret reference instead`);
+    }
+    rejectSecretMaterial(child, `${path}.${key}`);
+  }
+}
+
+function rejectRawSecret(manifest, path) {
+  if (manifest?.kind === "Secret" && (manifest.data || manifest.stringData)) {
+    throw new Error(`${path} contains Secret data; use a secret reference instead`);
+  }
+  rejectSecretMaterial(manifest?.metadata?.annotations, `${path}.metadata.annotations`);
 }
 
 function deploymentStrategy(service) {
@@ -476,7 +643,7 @@ function serviceAccountDocument(name, namespace) {
 function metadata(name, namespace, annotations = {}) {
   return {
     name,
-    namespace,
+    ...(namespace ? { namespace } : {}),
     ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
   };
 }
@@ -554,6 +721,12 @@ function yaml(value) {
     sortMapEntries: false,
     singleQuote: true,
   }).trimEnd();
+}
+
+function cloneSorted(value) {
+  if (Array.isArray(value)) return value.map(cloneSorted);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(sortedEntries(value).map(([key, child]) => [key, cloneSorted(child)]));
 }
 
 function sortedEntries(object) {

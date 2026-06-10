@@ -205,6 +205,15 @@
             "$ref": "#/$defs/nonEmptyString"
           }
         },
+        "files": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
         "env_from": {
           "type": "array",
           "items": {
@@ -356,6 +365,12 @@
           "items": {
             "enum": ["ReadWriteOnce", "ReadWriteMany", "ReadOnlyMany"]
           }
+        },
+        "claim_template": {
+          "type": "boolean"
+        },
+        "portable": {
+          "type": "boolean"
         }
       }
     },
@@ -594,6 +609,34 @@
               "minimum": 0
             }
           }
+        },
+        "autoscaling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "max_replicas"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "min_replicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_replicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "target_cpu_utilization": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "target_memory_utilization": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
         }
       }
     },
@@ -616,7 +659,18 @@
         "resource_hints": {
           "type": "array",
           "items": {
-            "enum": ["Deployment", "StatefulSet", "Job", "CronJob", "Service", "IngressRoute", "PVC", "PDB", "ServiceMonitor", "PodMonitor", "VaultStaticSecret"]
+            "enum": ["Deployment", "StatefulSet", "Job", "CronJob", "Service", "IngressRoute", "PVC", "PDB", "HPA", "ServiceMonitor", "PodMonitor", "VaultStaticSecret"]
+          }
+        },
+        "pod_spec": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "raw_manifests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
           }
         }
       }
