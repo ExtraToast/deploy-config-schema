@@ -6,8 +6,17 @@ import {
   groupByService,
   renderConfigMap,
 } from "./model.js";
+import type { DeployConfig, HealthProbe, KubernetesBackend } from "./model.js";
 
-export function renderGatus(config) {
+type GatusEndpoint = {
+  name: string;
+  group: string;
+  url: string;
+  interval: "60s";
+  conditions: string[];
+};
+
+export function renderGatus(config: DeployConfig): string {
   const groups = groupByService(config);
   const exposures = exposureByService(config);
   const endpoints = [
@@ -50,18 +59,26 @@ export function renderGatus(config) {
   });
 }
 
-function backendEntries(backends, mapper) {
+function backendEntries(
+  backends: Record<string, KubernetesBackend>,
+  mapper: (serviceName: string, backend: KubernetesBackend) => GatusEndpoint[],
+): GatusEndpoint[] {
   return Object.entries(backends).flatMap(([serviceName, backend]) => mapper(serviceName, backend));
 }
 
-function resolveProbeStrategy(config, serviceName, health, exposure) {
+function resolveProbeStrategy(
+  config: DeployConfig,
+  serviceName: string,
+  health: HealthProbe,
+  exposure: string | undefined,
+): "internal" | "external" | "both" {
   if (health.probe_strategy) return health.probe_strategy;
   if ((health.type ?? "http") === "tcp") return "internal";
   if (config.access_intent.sso_protected.includes(serviceName)) return "internal";
-  return ["public", "public_and_lan"].includes(exposure) ? "external" : "internal";
+  return exposure && ["public", "public_and_lan"].includes(exposure) ? "external" : "internal";
 }
 
-function internalUrl(backend, health) {
+function internalUrl(backend: KubernetesBackend, health: HealthProbe): string {
   const type = health.type ?? "http";
   const port = health.port ?? backend.port;
   const host = `${backend.service}.${backend.namespace}.svc.cluster.local`;
@@ -71,18 +88,18 @@ function internalUrl(backend, health) {
   return `http://${host}:${port}${health.path ?? "/"}`;
 }
 
-function externalUrl(host, health) {
+function externalUrl(host: string, health: HealthProbe): string {
   return `https://${host}${health.path ?? "/"}`;
 }
 
-function extraProbeEndpoints(serviceName, parentGroup, backend) {
+function extraProbeEndpoints(serviceName: string, parentGroup: string, backend: KubernetesBackend): GatusEndpoint[] {
   return (backend.extra_probes ?? []).map((probe) => endpoint(
     `${serviceName}-${probe.name}`,
     probe.group ?? parentGroup,
     internalUrl(backend, {
       type: probe.type ?? "tcp",
       path: probe.path ?? "/",
-      port: probe.port,
+      port: probe.port ?? backend.port,
       expected_status: probe.expected_status,
       response_time_ms: probe.response_time_ms,
     }),
@@ -91,7 +108,7 @@ function extraProbeEndpoints(serviceName, parentGroup, backend) {
   ));
 }
 
-function endpoint(baseName, group, url, health, suffix) {
+function endpoint(baseName: string, group: string, url: string, health: HealthProbe, suffix: string): GatusEndpoint {
   const type = health.type ?? "http";
   return {
     name: `${baseName}${suffix}`,

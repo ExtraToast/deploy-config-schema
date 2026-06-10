@@ -1,10 +1,24 @@
 import YAML from "yaml";
+import type { DeployConfig, JsonValue } from "./model.js";
 
-export function renderImageMetadata(config) {
+type ImageMetadataEntry = {
+  service: string;
+  repository: string;
+  tag: string;
+  pull_policy?: string;
+  source?: string;
+  update: {
+    eligible: boolean;
+    strategy: string;
+    keel?: Record<string, JsonValue>;
+  };
+};
+
+export function renderImageMetadata(config: DeployConfig): string {
   const workloads = Object.entries(config.image_metadata.workloads)
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([serviceName, workload]) => {
-      const entry = {
+    .map(([serviceName, workload]): ImageMetadataEntry => {
+      const entry: ImageMetadataEntry = {
         service: serviceName,
         repository: workload.repository,
         tag: workload.tag,

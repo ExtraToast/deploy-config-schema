@@ -1,19 +1,45 @@
 import YAML from "yaml";
+import type {
+  AdapterContext,
+  AdapterFile,
+  JsonValue,
+  RolloutRestartTarget,
+  VaultDynamicSecretsArtifact,
+  VaultDynamicSync,
+  VaultStaticSync,
+} from "./model.js";
 
 const ADAPTER = "vso";
 const DEFAULT_VSO_NAMESPACE = "vso-system";
 const DEFAULT_CONNECTION_NAME = "default";
 const DEFAULT_OPERATOR_SERVICE_ACCOUNT = "vault-secrets-operator";
 
-export function renderVso(context) {
+type VsoOptions = {
+  namespace: string;
+  connectionName: string;
+  vaultAddress: string;
+  operatorServiceAccount: string;
+};
+type VsoOverrides = {
+  namespace?: string;
+  vaultConnectionName?: string;
+  vaultAddress?: string;
+  operatorServiceAccount?: string;
+};
+type ManifestObject = Record<string, unknown>;
+type Vault = NonNullable<VaultDynamicSecretsArtifact["vault"]>;
+
+export function renderVso(context: AdapterContext): AdapterFile[] {
+  if (!("artifacts" in context)) return [];
   const vault = context.artifacts?.["vault-dynamic-secrets"]?.vault;
   if (!vault) return [];
+  const overrides = context.overrides?.vso as VsoOverrides | undefined;
 
   const options = {
-    namespace: context.overrides?.vso?.namespace ?? DEFAULT_VSO_NAMESPACE,
-    connectionName: context.overrides?.vso?.vaultConnectionName ?? DEFAULT_CONNECTION_NAME,
-    vaultAddress: context.overrides?.vso?.vaultAddress ?? "http://vault.vault-system.svc.cluster.local:8200",
-    operatorServiceAccount: context.overrides?.vso?.operatorServiceAccount ?? DEFAULT_OPERATOR_SERVICE_ACCOUNT,
+    namespace: overrides?.namespace ?? DEFAULT_VSO_NAMESPACE,
+    connectionName: overrides?.vaultConnectionName ?? DEFAULT_CONNECTION_NAME,
+    vaultAddress: overrides?.vaultAddress ?? "http://vault.vault-system.svc.cluster.local:8200",
+    operatorServiceAccount: overrides?.operatorServiceAccount ?? DEFAULT_OPERATOR_SERVICE_ACCOUNT,
   };
   const appsRoot = context.pathAllocator?.appsRoot ?? "platform/cluster/flux/apps";
   const basePath = `${appsRoot}/vso-secrets`;
@@ -30,7 +56,7 @@ export function renderVso(context) {
     },
   ];
 
-  const targetNamespaces = new Set();
+  const targetNamespaces = new Set<string>();
   for (const sync of Object.values(vault.vso.static_syncs ?? {})) targetNamespaces.add(sync.target.namespace);
   for (const sync of Object.values(vault.vso.dynamic_syncs ?? {})) targetNamespaces.add(sync.target.namespace);
   for (const namespace of [...targetNamespaces].sort()) {
@@ -70,7 +96,7 @@ export function renderVso(context) {
   return files.sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function vaultConnection(options) {
+function vaultConnection(options: VsoOptions): ManifestObject {
   return {
     apiVersion: "secrets.hashicorp.com/v1beta1",
     kind: "VaultConnection",
@@ -84,7 +110,7 @@ function vaultConnection(options) {
   };
 }
 
-function vaultAuth(vault, options) {
+function vaultAuth(vault: Vault, options: VsoOptions): ManifestObject {
   return {
     apiVersion: "secrets.hashicorp.com/v1beta1",
     kind: "VaultAuth",
@@ -104,7 +130,7 @@ function vaultAuth(vault, options) {
   };
 }
 
-function serviceAccount(namespace, name) {
+function serviceAccount(namespace: string, name: string): ManifestObject {
   return {
     apiVersion: "v1",
     kind: "ServiceAccount",
@@ -112,7 +138,7 @@ function serviceAccount(namespace, name) {
   };
 }
 
-function vaultStaticSecret(name, sync, vault, options) {
+function vaultStaticSecret(name: string, sync: VaultStaticSync, vault: Vault, options: VsoOptions): ManifestObject {
   const kv = vault.kv.paths[sync.kv_path_ref];
   return withoutUndefined({
     apiVersion: "secrets.hashicorp.com/v1beta1",
@@ -133,10 +159,10 @@ function vaultStaticSecret(name, sync, vault, options) {
       refreshAfter: "1h",
       rolloutRestartTargets: rolloutTargets(sync, sync.target.namespace),
     }),
-  });
+  }) as ManifestObject;
 }
 
-function vaultDynamicSecret(name, sync, options) {
+function vaultDynamicSecret(name: string, sync: VaultDynamicSync, options: VsoOptions): ManifestObject {
   return withoutUndefined({
     apiVersion: "secrets.hashicorp.com/v1beta1",
     kind: "VaultDynamicSecret",
@@ -155,19 +181,19 @@ function vaultDynamicSecret(name, sync, options) {
       renewalPercent: 67,
       rolloutRestartTargets: rolloutTargets(sync, sync.target.namespace),
     }),
-  });
+  }) as ManifestObject;
 }
 
-function rolloutTargets(sync, namespace) {
+function rolloutTargets(sync: { rollout_restart_targets?: RolloutRestartTarget[] }, namespace: string): ManifestObject[] | undefined {
   const targets = (sync.rollout_restart_targets ?? []).map((target) => withoutUndefined({
     kind: target.kind,
     name: target.name,
     ...(target.namespace !== namespace ? { namespace: target.namespace } : {}),
-  }));
+  }) as ManifestObject);
   return targets.length > 0 ? targets : undefined;
 }
 
-function normalizeKvPath(path, mount) {
+function normalizeKvPath(path: string, mount: string): string {
   const mountDataPrefix = `${mount}/data/`;
   const mountPrefix = `${mount}/`;
   if (path.startsWith(mountDataPrefix)) return path.slice(mountDataPrefix.length);
@@ -175,7 +201,7 @@ function normalizeKvPath(path, mount) {
   return path;
 }
 
-function yaml(value) {
+function yaml(value: unknown): string {
   return YAML.stringify(value, {
     indent: 2,
     lineWidth: 0,
@@ -184,11 +210,11 @@ function yaml(value) {
   }).trimEnd();
 }
 
-function sortedEntries(object) {
+function sortedEntries<T>(object: Record<string, T> | undefined): Array<[string, T]> {
   return Object.entries(object ?? {}).sort(([left], [right]) => left.localeCompare(right));
 }
 
-function withoutUndefined(value) {
+function withoutUndefined(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutUndefined);
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(

@@ -8,11 +8,30 @@ import {
   routeRules,
   serviceNamesWithIntent,
 } from "./model.js";
+import type { DeployConfig } from "./model.js";
 
-export function renderEdgeCatalog(config) {
+type CatalogEntry = {
+  name: string;
+  exposure: string | undefined;
+  access: string;
+  host?: string;
+};
+
+type RouteCatalogEntry = {
+  name: string;
+  service: string;
+  host: string;
+  access: string;
+  path_prefixes?: string[];
+  exact_paths?: string[];
+  excluded_path_prefixes?: string[];
+  excluded_paths?: string[];
+};
+
+export function renderEdgeCatalog(config: DeployConfig): string {
   const exposures = exposureByService(config);
-  const services = serviceNamesWithIntent(config).map((serviceName) => {
-    const entry = {
+  const services = serviceNamesWithIntent(config).map((serviceName): CatalogEntry => {
+    const entry: CatalogEntry = {
       name: serviceName,
       exposure: exposures.get(serviceName),
       access: accessForService(config, serviceName),
@@ -35,12 +54,12 @@ export function renderEdgeCatalog(config) {
   });
 }
 
-export function renderEdgeRouteCatalog(config) {
+export function renderEdgeRouteCatalog(config: DeployConfig): string {
   const routes = routeRules(config)
     .filter((route) => config.access_intent.host_labels[route.service] || route.host_label)
     .sort((left, right) => left.name.localeCompare(right.name))
     .map((route) => {
-      const entry = {
+      const entry: RouteCatalogEntry = {
         name: route.name,
         service: route.service,
         host: route.host,
@@ -64,8 +83,8 @@ export function renderEdgeRouteCatalog(config) {
   });
 }
 
-function copyList(target, key, value) {
-  if (value?.length > 0) {
-    target[key] = [...value];
+function copyList(target: RouteCatalogEntry, key: keyof RouteCatalogEntry, value: string[] | undefined): void {
+  if (value !== undefined && value.length > 0) {
+    (target as Record<string, unknown>)[key] = [...value];
   }
 }
