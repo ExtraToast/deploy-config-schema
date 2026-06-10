@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.4.0...v0.5.0) (2026-06-10)
+
+
+### Features
+
+* blueprint-pack distribution via explicit pinned checkout (spec 006) ([#21](https://github.com/ExtraToast/deploy-config-schema/issues/21)) ([685d854](https://github.com/ExtraToast/deploy-config-schema/commit/685d8541320232e297f4cd2baa5e747145f959a8))
+* flux-pack adapter depth — per-pack placeholder maps + fixtures (spec 004) ([#17](https://github.com/ExtraToast/deploy-config-schema/issues/17)) ([b2536de](https://github.com/ExtraToast/deploy-config-schema/commit/b2536ded0a7ae99514fe609451a69e19221215b6))
+* kubernetes workload adapter depth (spec 005) ([#19](https://github.com/ExtraToast/deploy-config-schema/issues/19)) ([423eeba](https://github.com/ExtraToast/deploy-config-schema/commit/423eebaeac8c7d1b0f3dcf4870ecdad0c654c2d5))
+* nix adapter depth + full render-tree fidelity (spec 007) ([#20](https://github.com/ExtraToast/deploy-config-schema/issues/20)) ([c6e3ab3](https://github.com/ExtraToast/deploy-config-schema/commit/c6e3ab3ebbec50c9a42bf877c8fade67886944dd))
+
 ## [0.4.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.3.0...v0.4.0) (2026-06-09)
 
 
