@@ -1,0 +1,59 @@
+version: 1
+
+cluster:
+  kubernetes:
+    bootstrap_control_plane: cp-1
+    api_server_endpoint: https://k3s.example.test:6443
+    control_plane_token_file: /run/secrets/k3s-control-plane-token
+    worker_join_token_file: /run/secrets/k3s-worker-token
+
+nodes:
+  cp-1:
+    status: active
+    site: frankfurt
+    arch: amd64
+    ssh:
+      host: cp-1.example.test
+      user: admin
+      port: 22
+    bootstrap_ssh:
+      host: bootstrap-cp-1.example.test
+      user: root
+      port: 2222
+    target_roles:
+      - k3s-control-plane
+      - utility-host
+    capabilities:
+      - nvidia
+
+  worker-1:
+    status: active
+    site: enschede
+    arch: arm64
+    ssh:
+      host: worker-1.example.test
+      user: deploy
+      port: 2201
+    target_roles:
+      - k3s-worker
+    capabilities: []
+
+  bootstrap-only:
+    status: provisioning
+    site: frankfurt
+    arch: arm64
+    bootstrap_ssh:
+      host: bootstrap-only.example.test
+      user: root
+      port: 2022
+    target_roles:
+      - k3s-worker
+    capabilities: []
+
+  no-ssh:
+    status: active
+    site: enschede
+    arch: amd64
+    target_roles:
+      - utility-host
+    capabilities: []
