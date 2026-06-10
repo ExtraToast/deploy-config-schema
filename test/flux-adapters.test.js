@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { posix } from "node:path";
 import { test } from "node:test";
 import YAML from "yaml";
 import { renderFluxPacks } from "../src/adapters/flux-packs.js";
+import { FLUX_PACKS } from "../src/adapters/flux-utils.js";
 import { inferFluxLayers, renderFluxRoot } from "../src/adapters/flux-root.js";
 import { renderFluxSource } from "../src/adapters/flux-source.js";
 import { expandPlatform } from "../src/minimal/expand.js";
@@ -145,7 +147,7 @@ function context(platform, options = {}) {
       environment: expansion.platform.gitops.environment,
       gatusGroup,
     }),
-    overrides: {},
+    overrides: options.overrides ?? {},
   };
   if (Object.hasOwn(options, "blueprintRegistry")) {
     input.blueprintRegistry = options.blueprintRegistry;
@@ -154,6 +156,52 @@ function context(platform, options = {}) {
   }
   if (options.diagnostics) input.diagnostics = options.diagnostics;
   return input;
+}
+
+function readJson(relativePath) {
+  return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
+}
+
+function realBlueprintRegistry() {
+  const entries = {};
+  for (const definition of Object.values(FLUX_PACKS)) {
+    const absolutePath = `/workspace/platform-blueprints/${definition.sourcePath}`;
+    entries[definition.sourcePath] = {};
+    for (const file of walk(absolutePath)) {
+      if (file.endsWith(".md")) continue;
+      entries[definition.sourcePath][file] = readFileSync(`${absolutePath}/${file}`, "utf8").trimEnd();
+    }
+  }
+  return entries;
+}
+
+function walk(root, prefix = "") {
+  return readdirSync(posix.join(root, prefix), { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = posix.join(prefix, entry.name);
+    if (entry.isDirectory()) return walk(root, relativePath);
+    if (!entry.isFile()) return [];
+    return [relativePath];
+  }).sort();
+}
+
+function platformForNamedPack(packName) {
+  const base = structuredClone(packName.includes("traefik-lan") || packName.includes("metallb") || packName.includes("observability")
+    ? personalStack
+    : website);
+  base.packs = {
+    "flux-core-cert-manager": { core: ["cert-manager"] },
+    "flux-core-external-dns-cloudflare": { core: ["external-dns"] },
+    "flux-core-traefik-public": { core: ["traefik-public"] },
+    "flux-core-traefik-lan": { core: ["traefik-lan"] },
+    "flux-core-metallb": { core: ["metallb"] },
+    "flux-core-vso": { core: ["vso"] },
+    "edge-pack": { edge: {} },
+    "edge-middleware-pack": { edgeMiddleware: true },
+    "observability-gatus-pack": { utility: { gatus: {} } },
+    "observability-stack-pack": { observability: { gatus: true } },
+    "rabbitmq-data-service-pack": { data: ["rabbitmq"] },
+  }[packName];
+  return base;
 }
 
 function parseDocuments(file) {
@@ -274,4 +322,41 @@ test("flux-packs does not read implicit machine-local blueprints", () => {
   assert.equal(files.some((file) => file.path.includes("ingress-controller")), false);
   assert.equal(diagnostics.length > 0, true);
   assert.equal(diagnostics[0].code, "E_BLUEPRINT_REGISTRY_MISSING");
+});
+
+for (const packName of Object.keys(FLUX_PACKS)) {
+  test(`flux-packs renders ${packName} deterministically from registry fixture`, () => {
+    const input = context(platformForNamedPack(packName), { blueprintRegistry: realBlueprintRegistry() });
+    const files = renderFluxPacks(input);
+    const expected = readJson(`../fixtures/flux-packs/${packName}.json`);
+
+    assert.deepEqual(files, expected);
+    assert.deepEqual(renderFluxPacks(input), files);
+    assert.doesNotMatch(files.map((file) => file.content).join("\n"), /\$\{[A-Z0-9_]+\}/);
+  });
+}
+
+test("flux-packs reports missing placeholder inputs with pack context", () => {
+  assert.throws(
+    () => renderFluxPacks(context(platformForNamedPack("flux-core-cert-manager"), {
+      blueprintRegistry: realBlueprintRegistry(),
+      overrides: { "flux-packs": { substitutions: { CERT_MANAGER_NAMESPACE: undefined } } },
+    })),
+    /flux pack flux-core-cert-manager is missing placeholder input\(s\): CERT_MANAGER_NAMESPACE/,
+  );
+});
+
+test("flux-packs reports undeclared placeholders with source context", () => {
+  const registry = {
+    ...realBlueprintRegistry(),
+    "packs/flux-core/cert-manager": {
+      ...realBlueprintRegistry()["packs/flux-core/cert-manager"],
+      "namespace.yaml": "kind: Namespace\nmetadata:\n  name: \"${NOT_DECLARED}\"",
+    },
+  };
+
+  assert.throws(
+    () => renderFluxPacks(context(platformForNamedPack("flux-core-cert-manager"), { blueprintRegistry: registry })),
+    /flux pack flux-core-cert-manager source packs\/flux-core\/cert-manager\/namespace.yaml uses undeclared placeholder NOT_DECLARED/,
+  );
 });

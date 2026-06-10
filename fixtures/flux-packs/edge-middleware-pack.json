@@ -1,0 +1,57 @@
+[
+  {
+    "path": "platform/cluster/flux/apps/edge/cluster-issuer-cloudflare.yaml",
+    "content": "apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: \"cloudflare\"\nspec:\n  acme:\n    email: \"admin@example.net\"\n    server: \"https://acme-v02.api.letsencrypt.org/directory\"\n    privateKeySecretRef:\n      name: \"cloudflare-acme-account-key\"\n    solvers:\n      - dns01:\n          cloudflare:\n            apiTokenSecretRef:\n              name: \"cloudflare-api-token\"\n              key: \"api-token\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/csp-profiles.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"csp-strict\"\n  namespace: \"edge-system\"\nspec:\n  headers:\n    contentSecurityPolicy: \"default-src 'self'\"\n---\napiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"csp-admin\"\n  namespace: \"edge-system\"\nspec:\n  headers:\n    contentSecurityPolicy: \"default-src 'self'; style-src 'self' 'unsafe-inline'\"\n---\napiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"csp-workflow\"\n  namespace: \"edge-system\"\nspec:\n  headers:\n    contentSecurityPolicy: \"default-src 'self'; connect-src 'self' https:\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/dashboard.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"traefik-dashboard-chain\"\n  namespace: \"edge-system\"\nspec:\n  chain:\n    middlewares:\n      - name: \"forward-auth\"\n      - name: \"security-headers\"\n      - name: \"csp-admin\"\n---\napiVersion: traefik.io/v1alpha1\nkind: IngressRoute\nmetadata:\n  name: \"traefik-dashboard\"\n  namespace: \"edge-system\"\nspec:\n  entryPoints:\n    - \"websecure\"\n  routes:\n    - match: \"Host(`traefik.example.net`)\"\n      kind: Rule\n      middlewares:\n        - name: \"traefik-dashboard-chain\"\n      services:\n        - name: api@internal\n          kind: TraefikService\n  tls:\n    secretName: \"wildcard-tls\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/forward-auth.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"forward-auth\"\n  namespace: \"edge-system\"\nspec:\n  forwardAuth:\n    address: \"http://forward-auth.edge-system.svc.cluster.local:4181\"\n    trustForwardHeader: true\n    authResponseHeaders:\n      - \"X-Forwarded-User\"\n      - \"X-Forwarded-Email\"\n      - \"X-Forwarded-Groups\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - cluster-issuer-cloudflare.yaml\n  - csp-profiles.yaml\n  - dashboard.yaml\n  - forward-auth.yaml\n  - local-cert-file-provider.yaml\n  - namespace.yaml\n  - security-headers.yaml\n  - traefik-default-tls.yaml\n  - traefik-forward-auth-middleware.yaml",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/local-cert-file-provider.yaml",
+    "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: \"traefik-local-cert-provider\"\n  namespace: \"edge-system\"\ndata:\n  dynamic.yaml: |\n    tls:\n      certificates:\n        - certFile: \"/certs/tls.crt\"\n          keyFile: \"/certs/tls.key\"\n      stores:\n        default:\n          defaultCertificate:\n            certFile: \"/certs/tls.crt\"\n            keyFile: \"/certs/tls.key\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/namespace.yaml",
+    "content": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: \"edge-system\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/security-headers.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"security-headers\"\n  namespace: \"edge-system\"\nspec:\n  headers:\n    browserXssFilter: true\n    contentTypeNosniff: true\n    frameDeny: true\n    referrerPolicy: \"strict-origin-when-cross-origin\"\n    permissionsPolicy: \"camera=(), microphone=(), geolocation=()\"\n    stsSeconds: 31536000\n    stsIncludeSubdomains: true\n    stsPreload: true\n    customResponseHeaders:\n      X-Frame-Options: \"DENY\"\n      X-Content-Type-Options: \"nosniff\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-default-tls.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: TLSStore\nmetadata:\n  name: \"default\"\n  namespace: \"edge-system\"\nspec:\n  defaultCertificate:\n    secretName: \"wildcard-tls\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-forward-auth-middleware.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"forward-auth\"\n  namespace: \"edge-system\"\nspec:\n  forwardAuth:\n    address: \"http://forward-auth.edge-system.svc.cluster.local:4181\"\n    trustForwardHeader: true\n    authResponseHeaders:\n      - \"X-Forwarded-User\"\n      - \"X-Forwarded-Email\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/stateless/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - api\n  - frontend",
+    "adapter": "flux-packs"
+  }
+]

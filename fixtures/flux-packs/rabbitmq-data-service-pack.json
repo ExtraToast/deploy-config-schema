@@ -1,0 +1,57 @@
+[
+  {
+    "path": "platform/cluster/flux/apps/data/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - rabbitmq",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/data/rabbitmq/internal-credentials.yaml",
+    "content": "apiVersion: secrets.hashicorp.com/v1beta1\nkind: VaultStaticSecret\nmetadata:\n  name: \"rabbitmq-internal-credentials\"\n  namespace: \"data-system\"\nspec:\n  type: kv-v2\n  mount: \"secret\"\n  path: \"website/rabbitmq/internal\"\n  destination:\n    name: \"rabbitmq-internal-credentials\"\n    create: true\n  refreshAfter: \"1h\"\n  vaultAuthRef: \"default\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/data/rabbitmq/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - namespace.yaml\n  - source.yaml\n  - internal-credentials.yaml\n  - release.yaml\n  - servicemonitor.yaml",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/data/rabbitmq/namespace.yaml",
+    "content": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: \"data-system\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/data/rabbitmq/servicemonitor.yaml",
+    "content": "apiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor\nmetadata:\n  name: \"rabbitmq\"\n  namespace: \"data-system\"\n  labels:\n    release: \"metrics-stack\"\nspec:\n  selector:\n    matchLabels:\n      app.kubernetes.io/instance: \"rabbitmq\"\n      app.kubernetes.io/name: \"rabbitmq\"\n  namespaceSelector:\n    matchNames:\n      - \"data-system\"\n  endpoints:\n    - port: metrics\n      interval: \"30s\"\n      scrapeTimeout: \"10s\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/cluster-issuer-cloudflare.yaml",
+    "content": "apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: \"cloudflare\"\nspec:\n  acme:\n    email: \"admin@example.net\"\n    server: \"https://acme-v02.api.letsencrypt.org/directory\"\n    privateKeySecretRef:\n      name: \"cloudflare-acme-account-key\"\n    solvers:\n      - dns01:\n          cloudflare:\n            apiTokenSecretRef:\n              name: \"cloudflare-api-token\"\n              key: \"api-token\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - namespace.yaml\n  - cluster-issuer-cloudflare.yaml\n  - traefik-default-tls.yaml\n  - traefik-forward-auth-middleware.yaml",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/namespace.yaml",
+    "content": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: \"edge-system\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-default-tls.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: TLSStore\nmetadata:\n  name: \"default\"\n  namespace: \"edge-system\"\nspec:\n  defaultCertificate:\n    secretName: \"wildcard-tls\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-forward-auth-middleware.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"forward-auth\"\n  namespace: \"edge-system\"\nspec:\n  forwardAuth:\n    address: \"http://forward-auth.edge-system.svc.cluster.local:4181\"\n    trustForwardHeader: true\n    authResponseHeaders:\n      - \"X-Forwarded-User\"\n      - \"X-Forwarded-Email\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/stateless/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - api\n  - frontend",
+    "adapter": "flux-packs"
+  }
+]

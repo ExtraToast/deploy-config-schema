@@ -1,0 +1,67 @@
+[
+  {
+    "path": "platform/cluster/flux/apps/edge/cluster-issuer-cloudflare.yaml",
+    "content": "apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: \"cloudflare\"\nspec:\n  acme:\n    email: \"admin@example.net\"\n    server: \"https://acme-v02.api.letsencrypt.org/directory\"\n    privateKeySecretRef:\n      name: \"cloudflare-acme-account-key\"\n    solvers:\n      - dns01:\n          cloudflare:\n            apiTokenSecretRef:\n              name: \"cloudflare-api-token\"\n              key: \"api-token\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - namespace.yaml\n  - cluster-issuer-cloudflare.yaml\n  - traefik-default-tls.yaml\n  - traefik-forward-auth-middleware.yaml",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/namespace.yaml",
+    "content": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: \"edge-system\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-default-tls.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: TLSStore\nmetadata:\n  name: \"default\"\n  namespace: \"edge-system\"\nspec:\n  defaultCertificate:\n    secretName: \"wildcard-tls\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-forward-auth-middleware.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"forward-auth\"\n  namespace: \"edge-system\"\nspec:\n  forwardAuth:\n    address: \"http://forward-auth.edge-system.svc.cluster.local:4181\"\n    trustForwardHeader: true\n    authResponseHeaders:\n      - \"X-Forwarded-User\"\n      - \"X-Forwarded-Email\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/media/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - jellyfin",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/stateless/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - app-ui",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/utility-system/gatus/config.yaml",
+    "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: \"gatus-config\"\n  namespace: \"utility-system\"\ndata:\n  config.yaml: |\n    storage:\n      type: sqlite\n      path: /data/gatus.db\n    ui:\n      title: \"personal-stack status\"\n      description: \"personal-stack service health\"\n      header: \"personal-stack status\"\n    endpoints: []",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/utility-system/gatus/deployment.yaml",
+    "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: \"gatus\"\n  namespace: \"utility-system\"\nspec:\n  replicas: 1\n  strategy:\n    type: Recreate\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: \"gatus\"\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: \"gatus\"\n    spec:\n      nodeSelector:\n        \"personal-stack/site\": \"frankfurt\"\n      containers:\n        - name: gatus\n          image: \"twinproduction/gatus:v5.20.0\"\n          imagePullPolicy: IfNotPresent\n          args:\n            - \"--config\"\n            - \"/config\"\n          ports:\n            - name: http\n              containerPort: 8080\n          resources:\n            requests:\n              cpu: \"50m\"\n              memory: \"64Mi\"\n            limits:\n              memory: \"256Mi\"\n          volumeMounts:\n            - name: data\n              mountPath: /data\n            - name: config\n              mountPath: /config/config.yaml\n              subPath: config.yaml\n            - name: endpoints\n              mountPath: /config/endpoints.yaml\n              subPath: endpoints.yaml\n      volumes:\n        - name: data\n          persistentVolumeClaim:\n            claimName: \"gatus-data\"\n        - name: config\n          configMap:\n            name: \"gatus-config\"\n        - name: endpoints\n          configMap:\n            name: \"gatus-endpoints\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/utility-system/gatus/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - config.yaml\n  - gatus-endpoints-configmap.yaml\n  - pvc.yaml\n  - deployment.yaml\n  - service.yaml",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/utility-system/gatus/pvc.yaml",
+    "content": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: \"gatus-data\"\n  namespace: \"utility-system\"\nspec:\n  accessModes:\n    - ReadWriteOnce\n  storageClassName: \"local-path\"\n  resources:\n    requests:\n      storage: \"1Gi\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/utility-system/gatus/service.yaml",
+    "content": "apiVersion: v1\nkind: Service\nmetadata:\n  name: \"gatus\"\n  namespace: \"utility-system\"\nspec:\n  selector:\n    app.kubernetes.io/name: \"gatus\"\n  ports:\n    - name: http\n      port: 8080\n      targetPort: http",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/utility-system/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - gatus",
+    "adapter": "flux-packs"
+  }
+]

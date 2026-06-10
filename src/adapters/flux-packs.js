@@ -5,24 +5,24 @@ import {
   blueprintFiles,
   componentName,
   contextArtifacts,
+  FLUX_PACKS,
   fluxFile,
   groupKustomization,
   hasPack,
   packValue,
   platformFromContext,
   servicesInGroup,
-  substitutePlaceholders,
   substitutionMap,
   yamlDocument,
 } from "./flux-utils.js";
 
 const corePackBlueprints = {
-  "cert-manager": "packs/flux-core/cert-manager",
-  "external-dns": "packs/flux-core/external-dns-cloudflare",
-  "traefik-public": "packs/flux-core/traefik-public",
-  "traefik-lan": "packs/flux-core/traefik-lan",
-  metallb: "packs/flux-core/metallb",
-  vso: "packs/flux-core/vso",
+  "cert-manager": "flux-core-cert-manager",
+  "external-dns": "flux-core-external-dns-cloudflare",
+  "traefik-public": "flux-core-traefik-public",
+  "traefik-lan": "flux-core-traefik-lan",
+  metallb: "flux-core-metallb",
+  vso: "flux-core-vso",
 };
 
 export function renderFluxPacks(input) {
@@ -42,7 +42,7 @@ export function renderFluxPacks(input) {
 
   for (const packName of selectedCorePacks(platform)) {
     const component = componentName(platform, packName);
-    const copied = copyBlueprint(input, corePackBlueprints[packName], appPath(input, "core", component), substitutions, {
+    const copied = copyPackBlueprint(input, corePackBlueprints[packName], appPath(input, "core", component), substitutions, {
       skipSourceRelease: true,
       skipFiles: packName === "metallb" ? ["address-pool.yaml"] : [],
       addFile,
@@ -50,7 +50,7 @@ export function renderFluxPacks(input) {
     if (copied) addResource("core", component);
   }
   if (hasPack(platform, "metallb")) {
-    const copied = copyBlueprint(input, "packs/flux-core/metallb", appPath(input, "metallb-config"), substitutions, {
+    const copied = copyPackBlueprint(input, "flux-core-metallb", appPath(input, "metallb-config"), substitutions, {
       onlyFiles: ["address-pool.yaml"],
       outputNames: { "address-pool.yaml": "config.yaml" },
       addFile,
@@ -59,24 +59,24 @@ export function renderFluxPacks(input) {
   }
 
   if (shouldRenderEdgePack(platform, artifacts)) {
-    copyBlueprint(input, "packs/edge", appPath(input, "edge"), substitutions, { addFile });
+    copyPackBlueprint(input, "edge-pack", appPath(input, "edge"), substitutions, { addFile });
   }
   if (packValue(platform, "edgeMiddleware") !== undefined || packValue(platform, "edge", "middleware") !== undefined) {
-    copyBlueprint(input, "packs/edge-middleware", appPath(input, "edge"), substitutions, {
+    copyPackBlueprint(input, "edge-middleware-pack", appPath(input, "edge"), substitutions, {
       addFile,
       mergeKustomizationResources: ["cluster-issuer-cloudflare.yaml", "traefik-default-tls.yaml", "traefik-forward-auth-middleware.yaml"],
     });
   }
 
   if (packValue(platform, "observability") !== undefined) {
-    copyBlueprint(input, "packs/observability", appPath(input, "observability"), substitutions, {
+    copyPackBlueprint(input, "observability-stack-pack", appPath(input, "observability"), substitutions, {
       skipSourceRelease: true,
       addFile,
       transform: transformGatusKustomization,
     });
   }
   if (packValue(platform, "utility", "gatus") !== undefined || packValue(platform, "utility")?.gatus !== undefined) {
-    const copied = copyBlueprint(input, "packs/observability/gatus", appPath(input, "utility-system", "gatus"), substitutions, {
+    const copied = copyPackBlueprint(input, "observability-gatus-pack", appPath(input, "utility-system", "gatus"), substitutions, {
       addFile,
       transform: transformGatusKustomization,
     });
@@ -84,7 +84,7 @@ export function renderFluxPacks(input) {
   }
 
   if (hasPack(platform, "rabbitmq")) {
-    const copied = copyBlueprint(input, "packs/rabbitmq-data-service", appPath(input, "data", "rabbitmq"), substitutions, {
+    const copied = copyPackBlueprint(input, "rabbitmq-data-service-pack", appPath(input, "data", "rabbitmq"), substitutions, {
       skipSourceRelease: true,
       addFile,
     });
@@ -126,8 +126,15 @@ function shouldRenderEdgePack(platform, artifacts) {
     || Object.keys(artifacts["deploy-config"]?.ingress_intent?.kubernetes_backends ?? {}).length > 0;
 }
 
-function copyBlueprint(input, blueprintPath, outputRoot, substitutions, options) {
-  const sourceFiles = blueprintFiles(input, blueprintPath);
+function copyPackBlueprint(input, packName, outputRoot, substitutions, options) {
+  const definition = FLUX_PACKS[packName];
+  if (!definition) throw new Error(`flux pack ${packName} is not defined`);
+
+  const sourceFiles = blueprintFiles(input, definition.sourcePath);
+  if (sourceFiles.length === 0) return false;
+
+  validatePackSubstitutions(packName, definition, substitutions);
+
   let copied = false;
   for (const file of sourceFiles) {
     if (options.onlyFiles && !options.onlyFiles.includes(file.relativePath)) continue;
@@ -138,10 +145,31 @@ function copyBlueprint(input, blueprintPath, outputRoot, substitutions, options)
     const outputPath = posix.join(outputRoot, relativePath);
     const merged = mergeGroupKustomization(file.content, options.mergeKustomizationResources);
     const transformed = options.transform ? options.transform(relativePath, merged) : merged;
-    options.addFile(outputPath, substitutePlaceholders(transformed, substitutions));
+    const content = substitutePackPlaceholders(packName, definition, file.relativePath, transformed, substitutions);
+    options.addFile(outputPath, content);
     copied = true;
   }
   return copied;
+}
+
+function validatePackSubstitutions(packName, definition, substitutions) {
+  const invalid = definition.placeholders.filter((name) => substitutions[name] === undefined || substitutions[name] === null);
+  if (invalid.length === 0) return;
+  throw new Error(`flux pack ${packName} is missing placeholder input(s): ${invalid.join(", ")}`);
+}
+
+function substitutePackPlaceholders(packName, definition, relativePath, content, substitutions) {
+  const allowed = new Set(definition.placeholders);
+  return content.replace(/\$\{([A-Z0-9_]+)\}/g, (match, name) => {
+    if (!allowed.has(name)) {
+      throw new Error(`flux pack ${packName} source ${definition.sourcePath}/${relativePath} uses undeclared placeholder ${name}`);
+    }
+    const value = substitutions[name];
+    if (value === undefined || value === null) {
+      throw new Error(`flux pack ${packName} source ${definition.sourcePath}/${relativePath} is missing placeholder input ${name}`);
+    }
+    return String(value);
+  });
 }
 
 function outputRelativePath(relativePath) {

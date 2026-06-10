@@ -1,0 +1,32 @@
+[
+  {
+    "path": "platform/cluster/flux/apps/edge/cluster-issuer-cloudflare.yaml",
+    "content": "apiVersion: cert-manager.io/v1\nkind: ClusterIssuer\nmetadata:\n  name: \"cloudflare\"\nspec:\n  acme:\n    email: \"admin@example.net\"\n    server: \"https://acme-v02.api.letsencrypt.org/directory\"\n    privateKeySecretRef:\n      name: \"cloudflare-acme-account-key\"\n    solvers:\n      - dns01:\n          cloudflare:\n            apiTokenSecretRef:\n              name: \"cloudflare-api-token\"\n              key: \"api-token\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - namespace.yaml\n  - cluster-issuer-cloudflare.yaml\n  - traefik-default-tls.yaml\n  - traefik-forward-auth-middleware.yaml",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/namespace.yaml",
+    "content": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: \"edge-system\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-default-tls.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: TLSStore\nmetadata:\n  name: \"default\"\n  namespace: \"edge-system\"\nspec:\n  defaultCertificate:\n    secretName: \"wildcard-tls\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/edge/traefik-forward-auth-middleware.yaml",
+    "content": "apiVersion: traefik.io/v1alpha1\nkind: Middleware\nmetadata:\n  name: \"forward-auth\"\n  namespace: \"edge-system\"\nspec:\n  forwardAuth:\n    address: \"http://forward-auth.edge-system.svc.cluster.local:4181\"\n    trustForwardHeader: true\n    authResponseHeaders:\n      - \"X-Forwarded-User\"\n      - \"X-Forwarded-Email\"",
+    "adapter": "flux-packs"
+  },
+  {
+    "path": "platform/cluster/flux/apps/stateless/kustomization.yaml",
+    "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - api\n  - frontend",
+    "adapter": "flux-packs"
+  }
+]
