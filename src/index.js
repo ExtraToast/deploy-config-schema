@@ -7,6 +7,7 @@ export { adapterContract, adapterNames, getAdapter, listAdapters, registerAdapte
 export { createRenderPlan, renderPlanFiles } from "./render-plan/plan.js";
 export { createPathAllocator } from "./render-plan/paths.js";
 export { generatedHeader, renderManagedContent, writeGeneratedFiles } from "./render-plan/writer.js";
+export { BLUEPRINTS_ROOT_ENV, loadBlueprintRegistry, resolveBlueprintRegistry } from "./blueprints/registry.js";
 export { normalizeServiceIntentForRender } from "./service-intent-normalizer.js";
 export { renderTraefik } from "./adapters/traefik.js";
 export { renderEdgeCatalog, renderEdgeRouteCatalog } from "./adapters/catalog.js";

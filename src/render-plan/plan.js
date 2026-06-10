@@ -22,6 +22,7 @@ export function createRenderPlan(expansion, options = {}) {
     version: 1,
     platform: platform.name,
     root: options.output ?? ".",
+    ...(options.blueprints ? { provenance: { blueprints: options.blueprints } } : {}),
     targets,
     availableAdapters: listAdapters().map((adapter) => ({
       name: adapter.name,
@@ -31,13 +32,15 @@ export function createRenderPlan(expansion, options = {}) {
   };
 }
 
-export function renderPlanFiles(expansion, plan) {
+export function renderPlanFiles(expansion, plan, options = {}) {
   const allocator = createPathAllocator({
     gitopsRoot: expansion.platform.gitops.root,
     environment: expansion.platform.gitops.environment,
     gatusGroup: gatusGroup(expansion.platform)
   });
-  const context = createAdapterContext(expansion, plan, allocator, {});
+  const context = createAdapterContext(expansion, plan, allocator, {
+    blueprintRegistry: options.blueprintRegistry,
+  });
   const files = plan.targets.flatMap((target) => {
     const adapter = getAdapter(target.adapter);
     return renderAdapterFiles(adapter, context).filter((file) => file.path === target.path);
