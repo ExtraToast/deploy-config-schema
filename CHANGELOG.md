@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.7.0...v0.8.0) (2026-06-10)
+
+
+### Features
+
+* show-host-env / show-install-host-env toolkit commands ([#29](https://github.com/ExtraToast/deploy-config-schema/issues/29)) ([7e295e8](https://github.com/ExtraToast/deploy-config-schema/commit/7e295e823f57697dc7d74d11a71e35a48a4be85f))
+
 ## [0.7.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.6.0...v0.7.0) (2026-06-10)
 
 
