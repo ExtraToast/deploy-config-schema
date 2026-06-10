@@ -36,6 +36,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run build
       - run: npm run validate:schema
       - run: npm run validate:sample
       - run: npm run render:sample > /tmp/traefik-ingressroutes.yaml
