@@ -14,6 +14,7 @@ import { validatePlatform } from "./minimal/schema.js";
 import { createRenderPlan, renderPlanFiles } from "./render-plan/plan.js";
 import { writeGeneratedFiles } from "./render-plan/writer.js";
 import { normalizeServiceIntentForRender } from "./service-intent-normalizer.js";
+import { fleetToDeployConfig } from "./fleet-to-deploy-config.js";
 
 const allAdapters = new Set(adapterNames());
 const platformTemplatePaths = {
@@ -42,6 +43,9 @@ export async function runCli(args, streams = { stdout: process.stdout, stderr: p
   }
   if (command === "render-tree") {
     return runRenderTree(rest, streams);
+  }
+  if (command === "fleet-to-deploy-config") {
+    return runFleetToDeployConfig(rest, streams);
   }
   if (command === "adapter-contract") {
     streams.stdout.write(`${JSON.stringify(adapterContract(), null, 2)}\n`);
@@ -263,6 +267,18 @@ function runRender(args, streams) {
 
   const rendered = renderAdapter(config, adapter);
   writeOutput(rendered, options.output, streams.stdout);
+  return 0;
+}
+
+function runFleetToDeployConfig(args, streams) {
+  const { positionals, diagnostics } = parseOptions(args);
+  if (diagnostics.length > 0 || positionals.length !== 1) {
+    writeDiagnostics(streams.stderr, diagnostics.length > 0 ? diagnostics : usageDiagnostic("fleet-to-deploy-config <fleet.yaml>"));
+    return 1;
+  }
+
+  const fleet = loadConfig(positionals[0]);
+  streams.stdout.write(`${JSON.stringify(fleetToDeployConfig(fleet), null, 2)}\n`);
   return 0;
 }
 
@@ -583,6 +599,7 @@ function usage() {
     "  deploy-config-schema render-plan <platform.yaml> [--target edge|adapter] [--output <root>] [--blueprints-root <dir>] [--blueprints-version <tag>]",
     "  deploy-config-schema render-tree <platform.yaml> --output <root> [--target edge|adapter] [--dry-run|--diff|--check|--force] [--blueprints-root <dir>] [--blueprints-version <tag>]",
     "  deploy-config-schema render <adapter> <config> [--input deploy-config|service-intent] [--output <path>]",
+    "  deploy-config-schema fleet-to-deploy-config <fleet.yaml>",
     "  deploy-config-schema adapter-contract",
     "",
     "Artifact kinds:",

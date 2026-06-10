@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "cluster": {
+    "name": "example",
+    "public_domain": "example.test"
+  },
+  "sites": {
+    "edge": {
+      "kind": "vps",
+      "purpose": "primary"
+    }
+  },
+  "nodes": {
+    "edge-1": {
+      "status": "active",
+      "site": "edge",
+      "arch": "amd64",
+      "target_roles": [
+        "k3s-worker"
+      ],
+      "capacity": {
+        "cpu_millicores": 4000,
+        "memory_mib": 8192
+      },
+      "capabilities": [
+        "public-ingress"
+      ]
+    }
+  },
+  "service_intent": {
+    "kubernetes": {
+      "public_apps": [
+        "web-ui",
+        "api",
+        "status"
+      ],
+      "internal_platform": [
+        "worker"
+      ]
+    }
+  },
+  "placement_intent": {
+    "site_affinity": {
+      "api": "frankfurt",
+      "web-ui": "frankfurt",
+      "worker": "enschede"
+    },
+    "node_affinity": {},
+    "gpu_preferences": {
+      "worker": {
+        "preferred_gpu_model": "test-gpu"
+      }
+    }
+  },
+  "exposure_intent": {
+    "public": [
+      "web-ui",
+      "api",
+      "status"
+    ],
+    "internal_only": [
+      "worker"
+    ]
+  },
+  "access_intent": {
+    "sso_protected": [
+      "api"
+    ],
+    "host_labels": {
+      "web-ui": "root",
+      "api": "api",
+      "status": "status"
+    },
+    "root_redirect": {
+      "status": "status-root"
+    }
+  },
+  "ingress_intent": {
+    "defaults": {
+      "namespace": "edge-system",
+      "public_ingress_class": "traefik-public",
+      "lan_ingress_class": "traefik-lan",
+      "entrypoint": "websecure",
+      "tls": true,
+      "public_dns_target": "ingress.example.test",
+      "sso_middleware": "forward-auth"
+    },
+    "kubernetes_backends": {
+      "web-ui": {
+        "namespace": "app-system",
+        "service": "web-ui",
+        "port": 80
+      },
+      "api": {
+        "namespace": "app-system",
+        "service": "api",
+        "port": 8080
+      }
+    },
+    "route_rules": [
+      {
+        "name": "api",
+        "service": "api",
+        "access": "sso_protected",
+        "path_prefixes": [
+          "/api/"
+        ],
+        "excluded_path_prefixes": [
+          "/api/internal/"
+        ],
+        "excluded_exact_paths": [
+          "/api/health"
+        ]
+      },
+      {
+        "name": "api-health",
+        "service": "api",
+        "access": "direct",
+        "path_prefixes": [
+          "/api/health/"
+        ],
+        "exact_paths": [
+          "/api/health"
+        ]
+      },
+      {
+        "name": "status",
+        "service": "status",
+        "access": "direct"
+      },
+      {
+        "name": "web-ui",
+        "service": "web-ui",
+        "access": "direct",
+        "excluded_path_prefixes": [
+          "/api/"
+        ]
+      }
+    ],
+    "wan_origin_overrides": {
+      "status": "edge_direct"
+    }
+  },
+  "monitoring_intent": {
+    "kubernetes_backends": {
+      "worker": {
+        "namespace": "workers",
+        "service": "worker",
+        "port": 9000
+      }
+    }
+  },
+  "image_metadata": {
+    "workloads": {}
+  },
+  "adapter_output_intent": {
+    "adapters": [
+      "traefik-public",
+      "traefik-lan",
+      "gatus",
+      "edge-catalog",
+      "edge-route-catalog"
+    ],
+    "output_paths": {},
+    "namespaces": {
+      "gatus": "observability",
+      "edge-catalog": "edge-system",
+      "edge-route-catalog": "edge-system"
+    },
+    "configmap_names": {
+      "gatus": "gatus-endpoints",
+      "edge-catalog": "platform-edge-catalog",
+      "edge-route-catalog": "platform-edge-route-catalog"
+    }
+  }
+}
