@@ -8,8 +8,24 @@ import { renderKubernetes } from "./kubernetes.js";
 import { renderNixHosts } from "./nix-hosts.js";
 import { renderTraefik } from "./traefik.js";
 import { renderVso } from "./vso.js";
+import type { AdapterContext, DeployConfig, RenderResult } from "./model.js";
 
-const adapterDefinitions = new Map();
+type AdapterTarget = "edge" | "kubernetes" | "nix" | "vault" | "flux";
+type AdapterInput = "deploy-config" | "canonical-artifacts";
+type AdapterStatus = "implemented";
+export type AdapterDefinition = {
+  name: string;
+  target: AdapterTarget;
+  input: AdapterInput;
+  status: AdapterStatus;
+  defaultPath: string;
+  // Registry entries are intentionally heterogeneous: single-artifact adapters
+  // receive DeployConfig, while tree adapters receive an adapter context.
+  render: (input: never) => RenderResult;
+};
+type ListOptions = { target?: string };
+
+const adapterDefinitions = new Map<string, Readonly<AdapterDefinition>>();
 
 registerAdapter({
   name: "traefik-public",
@@ -123,28 +139,32 @@ registerAdapter({
   render: renderFluxSource,
 });
 
-export const plannedAdapterContracts = Object.freeze([]);
+export const plannedAdapterContracts = Object.freeze([] as const);
 
-export function registerAdapter(definition) {
+export function registerAdapter(definition: AdapterDefinition): void {
   validateDefinition(definition);
   adapterDefinitions.set(definition.name, Object.freeze({ ...definition }));
 }
 
-export function getAdapter(name) {
+export function getAdapter(name: string): Readonly<AdapterDefinition> | undefined {
   return adapterDefinitions.get(name);
 }
 
-export function listAdapters(options = {}) {
+export function listAdapters(options: ListOptions = {}): Readonly<AdapterDefinition>[] {
   const adapters = [...adapterDefinitions.values()].sort((left, right) => left.name.localeCompare(right.name));
   if (!options.target) return adapters;
   return adapters.filter((adapter) => adapter.target === options.target || adapter.name === options.target);
 }
 
-export function adapterNames() {
+export function adapterNames(): string[] {
   return listAdapters().map((adapter) => adapter.name);
 }
 
-export function adapterContract() {
+export function adapterContract(): {
+  implemented: Array<Pick<AdapterDefinition, "name" | "target" | "input" | "status" | "defaultPath">>;
+  planned: readonly [];
+  context: { artifacts: string[]; receives: string[]; returns: string };
+} {
   return {
     implemented: listAdapters().map(({ name, target, input, status, defaultPath }) => ({ name, target, input, status, defaultPath })),
     planned: plannedAdapterContracts,
@@ -156,8 +176,8 @@ export function adapterContract() {
   };
 }
 
-function validateDefinition(definition) {
-  for (const field of ["name", "target", "input", "status", "defaultPath", "render"]) {
+function validateDefinition(definition: AdapterDefinition): void {
+  for (const field of ["name", "target", "input", "status", "defaultPath", "render"] as const) {
     if (!definition[field]) {
       throw new Error(`adapter definition missing ${field}`);
     }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import YAML from "yaml";
 
 const ADAPTER = "kubernetes";

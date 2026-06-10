@@ -36,15 +36,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run build
       - run: npm run validate:schema
       - run: npm run validate:sample
       - run: npm run render:sample > /tmp/traefik-ingressroutes.yaml
       - run: test -s /tmp/traefik-ingressroutes.yaml
-      - run: node bin/deploy-config-schema.js render traefik-lan samples/deploy-config.yaml > /tmp/traefik-lan-ingressroutes.yaml
-      - run: node bin/deploy-config-schema.js render gatus samples/deploy-config.yaml > /tmp/gatus-endpoints-configmap.yaml
-      - run: node bin/deploy-config-schema.js render edge-catalog samples/deploy-config.yaml > /tmp/edge-catalog-configmap.yaml
-      - run: node bin/deploy-config-schema.js render edge-route-catalog samples/deploy-config.yaml > /tmp/edge-route-catalog-configmap.yaml
-      - run: node bin/deploy-config-schema.js render image-metadata samples/deploy-config.yaml > /tmp/image-metadata.yaml
+      - run: node dist/bin/deploy-config-schema.js render traefik-lan samples/deploy-config.yaml > /tmp/traefik-lan-ingressroutes.yaml
+      - run: node dist/bin/deploy-config-schema.js render gatus samples/deploy-config.yaml > /tmp/gatus-endpoints-configmap.yaml
+      - run: node dist/bin/deploy-config-schema.js render edge-catalog samples/deploy-config.yaml > /tmp/edge-catalog-configmap.yaml
+      - run: node dist/bin/deploy-config-schema.js render edge-route-catalog samples/deploy-config.yaml > /tmp/edge-route-catalog-configmap.yaml
+      - run: node dist/bin/deploy-config-schema.js render image-metadata samples/deploy-config.yaml > /tmp/image-metadata.yaml
 
   workflow-lint:
     name: Workflow Lint

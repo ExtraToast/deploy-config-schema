@@ -2,6 +2,31 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import YAML from "yaml";
 import { safeRelativePath } from "../render-plan/paths.js";
+import type {
+  AdapterArtifacts,
+  AdapterContext,
+  AdapterFile,
+  BlueprintFile,
+  BlueprintRegistry,
+  DeployConfig,
+  PlatformConfig,
+} from "./model.js";
+
+type Substitutions = Record<string, string | number | boolean | null | undefined>;
+type PackEntry = { name: string; value: unknown; path: string[] };
+type PathAllocator = { appsRoot?: string; clusterRoot?: string };
+type FluxOverrides = {
+  blueprintRoot?: string;
+  blueprintPath?: string;
+  substitutions?: Substitutions;
+  [key: string]: unknown;
+};
+type PlatformLike = PlatformConfig & {
+  hosts?: Record<string, { capabilities?: string[]; site?: string }>;
+  sites?: Record<string, { lanIngress?: string; networking?: { lan_ingress_ip?: string } }>;
+  packs?: Record<string, unknown> | string[];
+};
+type BlueprintFileInput = { relativePath?: string; path?: string; content: unknown };
 
 const CORE_CERT_MANAGER_PLACEHOLDERS = [
   "CERT_MANAGER_CHART_NAME",
@@ -371,31 +396,33 @@ export const FLUX_PACKS = Object.freeze({
   },
 });
 
-export function contextArtifacts(input) {
-  if (input?.artifacts) return input.artifacts;
-  return { "deploy-config": input };
+export function contextArtifacts(input: AdapterContext): AdapterArtifacts {
+  if ("artifacts" in input && input.artifacts) return input.artifacts;
+  return { "deploy-config": input as DeployConfig };
 }
 
-export function platformFromContext(input) {
+export function platformFromContext(input: AdapterContext): PlatformLike {
   return contextArtifacts(input).platform ?? {};
 }
 
-export function deployConfigFromContext(input) {
-  return contextArtifacts(input)["deploy-config"] ?? input;
+export function deployConfigFromContext(input: AdapterContext): DeployConfig | undefined {
+  return contextArtifacts(input)["deploy-config"] ?? (input as DeployConfig);
 }
 
-export function pathAllocatorFromContext(input) {
-  return input?.pathAllocator;
+export function pathAllocatorFromContext(input: AdapterContext): PathAllocator | undefined {
+  return "pathAllocator" in input ? input.pathAllocator : undefined;
 }
 
-export function overridesFromContext(input, adapterName) {
+export function overridesFromContext(input: AdapterContext, adapterName: string): FluxOverrides {
+  const overrides = "overrides" in input ? input.overrides : undefined;
+  const adapterOverrides = overrides?.[adapterName];
   return {
-    ...(input?.overrides ?? {}),
-    ...(input?.overrides?.[adapterName] ?? {}),
-  };
+    ...(isRecord(overrides) ? overrides : {}),
+    ...(isRecord(adapterOverrides) ? adapterOverrides : {}),
+  } as FluxOverrides;
 }
 
-export function yamlDocument(document) {
+export function yamlDocument(document: unknown): string {
   return YAML.stringify(document, {
     indent: 2,
     lineWidth: 0,
@@ -403,11 +430,11 @@ export function yamlDocument(document) {
   }).trimEnd();
 }
 
-export function yamlDocuments(documents) {
+export function yamlDocuments(documents: unknown[]): string {
   return documents.map((document) => yamlDocument(document)).join("\n---\n");
 }
 
-export function fluxFile(path, content, adapter) {
+export function fluxFile(path: string, content: string, adapter: string): AdapterFile {
   return {
     path: safeRelativePath(path),
     content: content.endsWith("\n") ? content.trimEnd() : content,
@@ -415,49 +442,49 @@ export function fluxFile(path, content, adapter) {
   };
 }
 
-export function appPath(input, group, ...segments) {
+export function appPath(input: AdapterContext, group: string, ...segments: string[]): string {
   const allocator = pathAllocatorFromContext(input);
   const appsRoot = allocator?.appsRoot ?? posix.join(gitopsRoot(input), "apps");
   return posix.join(appsRoot, group, ...segments);
 }
 
-export function clusterPath(input, ...segments) {
+export function clusterPath(input: AdapterContext, ...segments: string[]): string {
   const allocator = pathAllocatorFromContext(input);
   const clusterRoot = allocator?.clusterRoot ?? posix.join(gitopsRoot(input), "clusters", environment(input));
   return posix.join(clusterRoot, ...segments);
 }
 
-export function gitopsRoot(input) {
+export function gitopsRoot(input: AdapterContext): string {
   return platformFromContext(input).gitops?.root
-    ?? deployConfigFromContext(input).gitops?.root
+    ?? deployConfigFromContext(input)?.gitops?.root
     ?? "platform/cluster/flux";
 }
 
-export function environment(input) {
+export function environment(input: AdapterContext): string {
   return platformFromContext(input).gitops?.environment
-    ?? deployConfigFromContext(input).gitops?.environment
+    ?? deployConfigFromContext(input)?.gitops?.environment
     ?? "production";
 }
 
-export function fluxInterval(input) {
+export function fluxInterval(input: AdapterContext): string {
   return normalizeDuration(platformFromContext(input).gitops?.interval ?? "10m");
 }
 
-export function hasPack(platform, ...names) {
+export function hasPack(platform: PlatformLike, ...names: string[]): boolean {
   const flattened = flattenPackEntries(platform.packs ?? {});
   return names.some((name) => flattened.some((entry) => entry.name === name));
 }
 
-export function packValue(platform, ...path) {
-  let cursor = platform.packs ?? {};
+export function packValue(platform: PlatformLike, ...path: string[]): unknown {
+  let cursor: unknown = platform.packs ?? {};
   for (const segment of path) {
     if (!cursor || typeof cursor !== "object") return undefined;
-    cursor = cursor[segment];
+    cursor = (cursor as Record<string, unknown>)[segment];
   }
   return cursor;
 }
 
-export function flattenPackEntries(value, parents = []) {
+export function flattenPackEntries(value: unknown, parents: string[] = []): PackEntry[] {
   if (Array.isArray(value)) {
     return value.map((name) => ({ name, value: true, path: [...parents, name] }));
   }
@@ -476,39 +503,39 @@ export function flattenPackEntries(value, parents = []) {
   });
 }
 
-export function serviceGroups(artifacts) {
+export function serviceGroups(artifacts: AdapterArtifacts): Map<string, string> {
   const config = artifacts["deploy-config"];
   return new Map(Object.entries(config?.service_intent?.kubernetes ?? {}).flatMap(([group, names]) => (
     names.map((name) => [name, group.replaceAll("_", "-")])
   )));
 }
 
-export function servicesInGroup(artifacts, group) {
+export function servicesInGroup(artifacts: AdapterArtifacts, group: string): string[] {
   const config = artifacts["deploy-config"];
   return config?.service_intent?.kubernetes?.[group.replaceAll("-", "_")] ?? [];
 }
 
-export function hasServiceGroup(artifacts, group) {
+export function hasServiceGroup(artifacts: AdapterArtifacts, group: string): boolean {
   return servicesInGroup(artifacts, group).length > 0;
 }
 
-export function serviceUsesSecrets(artifacts, serviceName) {
+export function serviceUsesSecrets(artifacts: AdapterArtifacts, serviceName: string): boolean {
   return Object.hasOwn(artifacts["vault-dynamic-secrets"]?.vault?.service_consumers ?? {}, serviceName);
 }
 
-export function serviceHasRoute(artifacts, serviceName) {
+export function serviceHasRoute(artifacts: AdapterArtifacts, serviceName: string): boolean {
   const config = artifacts["deploy-config"];
   return Object.hasOwn(config?.ingress_intent?.kubernetes_backends ?? {}, serviceName);
 }
 
-export function serviceHasDataDependency(artifacts, serviceName) {
+export function serviceHasDataDependency(artifacts: AdapterArtifacts, serviceName: string): boolean {
   const service = artifacts["service-intent"]?.services?.[serviceName];
   return (service?.storage?.volumes ?? []).length > 0
     || (service?.secrets ?? []).some((secret) => secret.source === "vault_dynamic_database" || secret.source === "vault_dynamic_rabbitmq");
 }
 
-export function blueprintFiles(input, blueprintPath) {
-  const registry = input?.blueprintRegistry;
+export function blueprintFiles(input: AdapterContext, blueprintPath: string): BlueprintFile[] {
+  const registry = "blueprintRegistry" in input ? input.blueprintRegistry : undefined;
   const registryFiles = blueprintRegistryFiles(registry, blueprintPath);
   if (registryFiles) return registryFiles;
 
@@ -526,7 +553,7 @@ export function blueprintFiles(input, blueprintPath) {
   }));
 }
 
-function blueprintRegistryFiles(registry, blueprintPath) {
+function blueprintRegistryFiles(registry: BlueprintRegistry | undefined, blueprintPath: string): BlueprintFile[] | undefined {
   if (!registry) return undefined;
   if (typeof registry.files === "function") return normalizeBlueprintFiles(registry.files(blueprintPath));
   if (typeof registry.readFiles === "function") return normalizeBlueprintFiles(registry.readFiles(blueprintPath));
@@ -534,24 +561,25 @@ function blueprintRegistryFiles(registry, blueprintPath) {
   return normalizeBlueprintFiles(registry[blueprintPath] ?? registry.packs?.[blueprintPath]);
 }
 
-function normalizeBlueprintFiles(files) {
+function normalizeBlueprintFiles(files: unknown): BlueprintFile[] | undefined {
   if (!files) return undefined;
   const entries = Array.isArray(files)
     ? files
-    : Object.entries(files.files ?? files).map(([relativePath, content]) => ({ relativePath, content }));
-  return entries.map((file) => ({
+    : Object.entries((isRecord(files) && isRecord(files.files) ? files.files : files) as Record<string, unknown>)
+      .map(([relativePath, content]) => ({ relativePath, content }));
+  return (entries as BlueprintFileInput[]).map((file) => ({
     relativePath: safeRelativePath(file.relativePath ?? file.path),
     content: String(file.content),
   })).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-function explicitBlueprintRoot(input) {
+function explicitBlueprintRoot(input: AdapterContext): string | undefined {
   const overrides = overridesFromContext(input, "flux");
-  return overrides.blueprintRoot ?? overrides.blueprintPath;
+  return String(overrides.blueprintRoot ?? overrides.blueprintPath ?? "") || undefined;
 }
 
-function addBlueprintDiagnostic(input, blueprintPath) {
-  if (!Array.isArray(input?.diagnostics)) return;
+function addBlueprintDiagnostic(input: AdapterContext, blueprintPath: string): void {
+  if (!("diagnostics" in input) || !Array.isArray(input.diagnostics)) return;
   input.diagnostics.push({
     code: "E_BLUEPRINT_REGISTRY_MISSING",
     path: blueprintPath,
@@ -559,14 +587,14 @@ function addBlueprintDiagnostic(input, blueprintPath) {
   });
 }
 
-export function substitutePlaceholders(content, substitutions) {
+export function substitutePlaceholders(content: string, substitutions: Substitutions): string {
   return content.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, name) => {
     if (Object.hasOwn(substitutions, name)) return String(substitutions[name]);
     return placeholderFallback(name);
   });
 }
 
-export function substitutionMap(input, extra = {}) {
+export function substitutionMap(input: AdapterContext, extra: Substitutions = {}): Substitutions {
   const platform = platformFromContext(input);
   const config = deployConfigFromContext(input);
   const domain = platform.domain ?? config?.cluster?.public_domain ?? "example.invalid";
@@ -878,16 +906,17 @@ export function substitutionMap(input, extra = {}) {
   return Object.fromEntries(Object.entries(map).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-export function componentName(platform, packName) {
-  const overrides = platform.packs?.components ?? {};
-  if (overrides[packName]) return overrides[packName];
+export function componentName(platform: PlatformLike, packName: string): string {
+  const packs = isRecord(platform.packs) ? platform.packs : {};
+  const overrides = isRecord(packs.components) ? packs.components : {};
+  if (typeof overrides[packName] === "string") return overrides[packName];
   if (packName === "traefik-public") return hasPack(platform, "traefik-lan") ? "ingress-controller" : "traefik";
   if (packName === "traefik-lan") return "lan-ingress-controller";
   if (packName === "external-dns") return "external-dns";
   return packName;
 }
 
-export function groupKustomization(resources) {
+export function groupKustomization(resources: string[]): string {
   return yamlDocument({
     apiVersion: "kustomize.config.k8s.io/v1beta1",
     kind: "Kustomization",
@@ -895,13 +924,13 @@ export function groupKustomization(resources) {
   });
 }
 
-export function normalizeDuration(value) {
+export function normalizeDuration(value: unknown): string {
   if (typeof value !== "string") return "10m0s";
   if (/^[0-9]+m$/.test(value)) return `${value}0s`;
   return value;
 }
 
-function walk(root, prefix = "") {
+function walk(root: string, prefix = ""): string[] {
   return readdirSync(posix.join(root, prefix), { withFileTypes: true }).flatMap((entry) => {
     const relativePath = posix.join(prefix, entry.name);
     if (entry.isDirectory()) return walk(root, relativePath);
@@ -910,27 +939,33 @@ function walk(root, prefix = "") {
   }).sort();
 }
 
-function placeholderFallback(name) {
+function placeholderFallback(name: string): string {
   if (name.endsWith("_ENABLED") || name.endsWith("_DISABLE_BASIC_AUTH") || name.startsWith("EDGE_SECURITY_") || name.endsWith("_TRUST_FORWARD_HEADER")) return "false";
   if (name.endsWith("_PORT") || name.endsWith("_SECONDS") || name.endsWith("_COUNT") || name.endsWith("_WEIGHT")) return "0";
   if (name.endsWith("_SAMPLE_RATE")) return "1";
   return name.toLowerCase().replaceAll("_", "-");
 }
 
-function firstLanIngress(platform) {
-  const ingress = Object.values(platform.sites ?? {}).map((site) => site.lanIngress).find(Boolean);
+function firstLanIngress(platform: PlatformLike): string | undefined {
+  const ingress = Object.values(platform.sites ?? {})
+    .map((site) => site.lanIngress ?? site.networking?.lan_ingress_ip)
+    .find(Boolean);
   if (!ingress) return undefined;
   return ingress.includes("-") ? ingress : `${ingress}-${ingress}`;
 }
 
-function firstHostSelector(platform, capability) {
+function firstHostSelector(platform: PlatformLike, capability: string): { key: string; value: string } {
   const entry = Object.entries(platform.hosts ?? {}).find(([, host]) => (host.capabilities ?? []).includes(capability));
   if (entry) return { key: `${platform.name}/site`, value: entry[1].site ?? "default" };
   const first = Object.values(platform.hosts ?? {})[0];
   return { key: `${platform.name ?? "cluster"}/site`, value: first?.site ?? "default" };
 }
 
-function gatusNamespace(platform) {
+function gatusNamespace(platform: PlatformLike): string {
   if (packValue(platform, "observability", "gatus") !== undefined) return "observability";
   return "utility-system";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

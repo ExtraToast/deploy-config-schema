@@ -1,22 +1,25 @@
 import { exposureByService, fqdn, routeRules } from "./model.js";
+import type { DeployConfig, KubernetesBackend, ResolvedRouteRule } from "./model.js";
 
 const PUBLIC_ADAPTER = "traefik-public";
 const LAN_ADAPTER = "traefik-lan";
+type TraefikAdapter = typeof PUBLIC_ADAPTER | typeof LAN_ADAPTER;
+type DnsTarget = { target: string; cloudflareProxied: boolean };
 
-export function renderTraefik(config, adapter) {
+export function renderTraefik(config: DeployConfig, adapter: TraefikAdapter): string {
   if (![PUBLIC_ADAPTER, LAN_ADAPTER].includes(adapter)) {
     throw new Error(`unsupported Traefik adapter: ${adapter}`);
   }
 
   const isLan = adapter === LAN_ADAPTER;
   const serviceNames = isLan
-    ? new Set([...config.exposure_intent.public_and_lan, ...config.exposure_intent.lan_only])
-    : new Set([...config.exposure_intent.public, ...config.exposure_intent.public_and_lan]);
+    ? new Set<string>([...config.exposure_intent.public_and_lan, ...config.exposure_intent.lan_only])
+    : new Set<string>([...config.exposure_intent.public, ...config.exposure_intent.public_and_lan]);
   const className = isLan
     ? config.ingress_intent.defaults.lan_ingress_class
     : config.ingress_intent.defaults.public_ingress_class;
   const suffix = isLan ? "-lan" : "";
-  const dnsTargets = isLan ? new Map() : publicDnsTargets(config);
+  const dnsTargets = isLan ? new Map<string, DnsTarget>() : publicDnsTargets(config);
 
   const routes = routeRules(config)
     .filter((route) => serviceNames.has(route.service))
@@ -37,8 +40,8 @@ export function renderTraefik(config, adapter) {
     .join("\n---\n");
 }
 
-function publicDnsTargets(config) {
-  const targets = new Map([
+function publicDnsTargets(config: DeployConfig): Map<string, DnsTarget> {
+  const targets = new Map<string, DnsTarget>([
     [
       "*",
       {
@@ -62,11 +65,17 @@ function publicDnsTargets(config) {
   return targets;
 }
 
-function siteWanIp(config, purpose) {
+function siteWanIp(config: DeployConfig, purpose: string): string | undefined {
   return Object.values(config.sites).find((site) => site.purpose === purpose)?.networking?.wan_public_ip;
 }
 
-function renderIngressRoute(config, route, backend, className, dnsTarget) {
+function renderIngressRoute(
+  config: DeployConfig,
+  route: ResolvedRouteRule,
+  backend: KubernetesBackend,
+  className: string,
+  dnsTarget: DnsTarget | undefined,
+): string {
   const namespace = config.ingress_intent.defaults.namespace;
   const lines = [
     "apiVersion: traefik.io/v1alpha1",
@@ -109,8 +118,8 @@ function renderIngressRoute(config, route, backend, className, dnsTarget) {
   return lines.join("\n");
 }
 
-function routeMiddlewares(config, route) {
-  const middlewares = [];
+function routeMiddlewares(config: DeployConfig, route: ResolvedRouteRule): string[] {
+  const middlewares: string[] = [];
   const rootRedirect = config.access_intent.root_redirect[route.service];
   if (rootRedirect) {
     middlewares.push(rootRedirect);
@@ -121,7 +130,7 @@ function routeMiddlewares(config, route) {
   return middlewares;
 }
 
-function toTraefikMatch(config, route) {
+function toTraefikMatch(config: DeployConfig, route: ResolvedRouteRule): string {
   const positive = [
     ...(route.path_prefixes ?? []).map((path) => `PathPrefix(\`${path}\`)`),
     ...(route.exact_paths ?? []).map((path) => `Path(\`${path}\`)`),
@@ -139,12 +148,12 @@ function toTraefikMatch(config, route) {
   return predicates.join(" && ");
 }
 
-function combinePredicates(predicates) {
+function combinePredicates(predicates: string[]): string | undefined {
   if (predicates.length === 0) return undefined;
   if (predicates.length === 1) return predicates[0];
   return `(${predicates.join(" || ")})`;
 }
 
-function yamlSingleQuoted(value) {
+function yamlSingleQuoted(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
