@@ -9,6 +9,7 @@ export { createPathAllocator } from "./render-plan/paths.js";
 export { generatedHeader, renderManagedContent, writeGeneratedFiles } from "./render-plan/writer.js";
 export { BLUEPRINTS_ROOT_ENV, loadBlueprintRegistry, resolveBlueprintRegistry } from "./blueprints/registry.js";
 export { normalizeServiceIntentForRender } from "./service-intent-normalizer.js";
+export { fleetToDeployConfig, type FleetInventoryInput } from "./fleet-to-deploy-config.js";
 export { renderTraefik } from "./adapters/traefik.js";
 export { renderEdgeCatalog, renderEdgeRouteCatalog } from "./adapters/catalog.js";
 export { renderFluxPacks } from "./adapters/flux-packs.js";

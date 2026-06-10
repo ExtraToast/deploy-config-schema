@@ -108,6 +108,18 @@ export const fleetInventoryJsonSchema = {
           "items": {
             "$ref": "#/$defs/rendererTarget"
           }
+        },
+        "ingress_intent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "route_rules": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/routeRule"
+              }
+            }
+          }
         }
       }
     },
@@ -560,6 +572,51 @@ export const fleetInventoryJsonSchema = {
               "$ref": "#/$defs/nonEmptyString"
             }
           }
+        }
+      }
+    },
+    "pathList": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^/"
+      }
+    },
+    "routeRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier"
+        },
+        "service": {
+          "$ref": "#/$defs/identifier"
+        },
+        "access": {
+          "enum": [
+            "direct",
+            "sso_protected",
+            "cluster_internal",
+            "token_protected"
+          ]
+        },
+        "path_prefixes": {
+          "$ref": "#/$defs/pathList"
+        },
+        "exact_paths": {
+          "$ref": "#/$defs/pathList"
+        },
+        "excluded_path_prefixes": {
+          "$ref": "#/$defs/pathList"
+        },
+        "excluded_exact_paths": {
+          "$ref": "#/$defs/pathList"
+        },
+        "excluded_paths": {
+          "$ref": "#/$defs/pathList"
         }
       }
     },
