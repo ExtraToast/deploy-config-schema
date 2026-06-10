@@ -1,6 +1,6 @@
 {
   "name": "@extratoast/deploy-config-schema",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "JSON Schema and CLI contract for deploy and infrastructure config artifacts.",
   "type": "module",
   "main": "./dist/src/index.js",

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.6.0...v0.7.0) (2026-06-10)
+
+
+### Features
+
+* fleet-to-deploy-config toolkit command (generic, data-driven routes) ([#28](https://github.com/ExtraToast/deploy-config-schema/issues/28)) ([bc8f109](https://github.com/ExtraToast/deploy-config-schema/commit/bc8f109f77b725784252711f3a4089c427192b75))
+* TypeScript build + Zod-sourced generated schemas (spec 011 pass 1+2) ([#24](https://github.com/ExtraToast/deploy-config-schema/issues/24)) ([e92154a](https://github.com/ExtraToast/deploy-config-schema/commit/e92154a9fd72079b95d7300e09288127960f52ef))
+
 ## [0.6.0](https://github.com/ExtraToast/deploy-config-schema/compare/v0.5.0...v0.6.0) (2026-06-10)
 
 
